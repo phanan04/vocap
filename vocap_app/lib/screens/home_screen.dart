@@ -42,7 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Level & Assessment State
   String _currentBand = '5.5';
   String _targetBand = '6.5';
-  bool _hasCompletedPlacementTest = true; // default true to avoid flicker
 
   // User Profile
   Map<String, dynamic>? _userProfile;
@@ -61,7 +60,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final progress = await _progressService.getProgress();
-      final hasCompletedTest = await _testService.hasCompletedTest();
       final localAssessedBand = await _testService.getAssessedBand();
 
       Map<String, dynamic>? profile;
@@ -102,7 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _learnedToday = learnedToday;
           _currentBand = currentBand;
           _targetBand = targetBand;
-          _hasCompletedPlacementTest = hasCompletedTest;
           _streak = profile != null && profile['streak_count'] != null && (profile['streak_count'] as int) > 0
               ? (profile['streak_count'] as int)
               : (progress['streak'] as int);
@@ -124,15 +121,6 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
-  }
-
-  void _openPlacementTest() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlacementTestScreen(onTestCompleted: _loadDashboardData),
-      ),
-    ).then((_) => _loadDashboardData());
   }
 
   void _openAuthScreen() {
@@ -263,62 +251,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Icon(Icons.error_outline, color: Colors.red),
                       const SizedBox(width: 8),
                       Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13))),
-                    ],
-                  ),
-                ),
-
-              // Placement Test Banner (if test not completed)
-              if (!_hasCompletedPlacementTest)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 20),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppTheme.primary.withOpacity(0.25), const Color(0xFF1E293B)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.primary.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.school, color: Colors.white, size: 24),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Đánh giá trình độ từ vựng 🎯',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              'Làm bài test 2 phút để tự động lọc bỏ các từ vựng quá dễ!',
-                              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _openPlacementTest,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: const Text('Làm test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
                     ],
                   ),
                 ),

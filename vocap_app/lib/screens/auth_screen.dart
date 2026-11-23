@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../core/theme/app_theme.dart';
+import 'placement_test_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback? onAuthSuccess;
@@ -48,12 +49,18 @@ class _AuthScreenState extends State<AuthScreen> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎉 Đăng ký thành công! Chào mừng bạn đến với Vocap.'),
-              backgroundColor: AppTheme.primary,
+          // Immediately redirect to Placement Test Onboarding
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PlacementTestScreen(
+                isInitialOnboarding: true,
+                initialTargetBand: _selectedTargetBand,
+                onTestCompleted: widget.onAuthSuccess,
+              ),
             ),
           );
+          return;
         }
       } else {
         await _authService.signIn(
@@ -67,12 +74,9 @@ class _AuthScreenState extends State<AuthScreen> {
               backgroundColor: AppTheme.primary,
             ),
           );
+          widget.onAuthSuccess?.call();
+          Navigator.pop(context, true);
         }
-      }
-
-      if (mounted) {
-        widget.onAuthSuccess?.call();
-        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
