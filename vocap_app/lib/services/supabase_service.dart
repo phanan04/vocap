@@ -218,6 +218,7 @@ class SupabaseService {
   /// Get unified smart study session: SM-2 Reviews First + Thematic Adaptive New Words
   Future<List<WordModel>> getSmartStudySession({
     String targetBand = '6.5',
+    String currentBand = '5.5',
     int limit = 20,
   }) async {
     final user = _client.auth.currentUser;
@@ -226,6 +227,7 @@ class SupabaseService {
         'p_user_id': user?.id,
         'p_target_band': targetBand,
         'p_limit': limit,
+        'p_current_band': currentBand,
       });
 
       final words = (response as List<dynamic>)
@@ -243,6 +245,23 @@ class SupabaseService {
         return cached.take(limit).toList();
       }
       return [];
+    }
+  }
+
+  /// Bulk skip all words below current assessed band
+  Future<Map<String, dynamic>> skipWordsBelowBand(String currentBand) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      return {'status': 'guest_mode', 'success': true};
+    }
+
+    try {
+      final response = await _client.rpc('skip_words_below_band', params: {
+        'p_current_band': currentBand,
+      });
+      return Map<String, dynamic>.from(response as Map);
+    } catch (e) {
+      return {'status': 'error', 'error': e.toString()};
     }
   }
 

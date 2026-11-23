@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/offline_service.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/placement_test_service.dart';
 import '../core/theme/app_theme.dart';
 import 'auth_screen.dart';
+import 'placement_test_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onSettingsChanged;
@@ -18,16 +20,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final OfflineService _offlineService = OfflineService();
   final AuthService _authService = AuthService();
   final SupabaseService _supabaseService = SupabaseService();
+  final PlacementTestService _testService = PlacementTestService();
 
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 20, minute: 0);
   int _dailyTarget = 10;
   String _targetBand = '6.5';
+  String _currentBand = '5.5';
   int _pendingSyncCount = 0;
   int _cachedWordsCount = 0;
   bool _isSyncing = false;
+  bool _isSkipping = false;
 
   final List<String> _targetBands = ['5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
+  final List<String> _currentBands = ['4.5', '5.5', '6.5', '7.5'];
   final List<int> _dailyTargets = [5, 10, 15, 20, 25, 30];
 
   @override
@@ -40,6 +46,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final reminder = await _offlineService.getReminderSettings();
     final pending = await _offlineService.getPendingQueueCount();
     final cached = await _offlineService.getCachedWords();
+    final localAssessedBand = await _testService.getAssessedBand();
+
+    String currentBand = localAssessedBand ?? '5.5';
 
     if (_authService.isLoggedIn) {
       final profile = await _authService.getUserProfile();
@@ -50,6 +59,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (profile['target_band'] != null) {
           _targetBand = profile['target_band'] as String;
         }
+        if (profile['current_band'] != null) {
+          currentBand = profile['current_band'] as String;
+        }
       }
     }
 
@@ -59,7 +71,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _reminderTime = TimeOfDay(hour: reminder['hour'] as int, minute: reminder['minute'] as int);
         _pendingSyncCount = pending;
         _cachedWordsCount = cached.length;
+        _currentBand = currentBand;
       });
+    }
+  }
+
+  Future<void> _handleSkipWordsBelowBand() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Bỏ qua từ vựng cơ bản?'),
+        content: Text(
+          'Hệ thống sẽ đánh dấu toàn bộ từ vựng dưới trình độ Band $_currentBand là "Đã thuộc".\n\nCác từ quá dễ này sẽ không còn xuất hiện trong các bài học hàng ngày nữa.',
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
+            child: const Text('Đồng ý bỏ qua'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isSkipping = true);
+    final res = await _supabaseService.skipWordsBelowBand(_currentBand);
+    final skippedCount = res['skipped_count'] ?? 0;
+
+    if (mounted) {
+      setState(() => _isSkipping = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Đã lọc bỏ thành công $skippedCount từ vựng dưới Band $_currentBand!'),
+          backgroundColor: Colors.green.shade800,
+        ),
+      );
+      widget.onSettingsChanged?.call();
     }
   }
 
@@ -190,29 +246,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 20),
 
             // Study Goals Section
-            const Text('Mục tiêu học tập', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+            const Text('Trình độ & Mục tiêu học tập', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary)),
             const SizedBox(height: 10),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Daily Target
+                    // Placement Test Shortcut Card
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppTheme.primary.withOpacity(0.2), Colors.transparent],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.quiz, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Đánh giá trình độ (2 phút)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                SizedBox(height: 2),
+                                Text('Làm bài test 15 câu để Vocap lọc bỏ các từ quá dễ', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PlacementTestScreen(
+                                    onTestCompleted: () {
+                                      _loadSettings();
+                                      widget.onSettingsChanged?.call();
+                                    },
+                                  ),
+                                ),
+                              ).then((_) {
+                                _loadSettings();
+                                widget.onSettingsChanged?.call();
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Làm Test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Current Band
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Số từ mục tiêu mỗi ngày:', style: TextStyle(fontSize: 15)),
-                        DropdownButton<int>(
-                          value: _dailyTarget,
+                        const Text('Trình độ hiện tại:', style: TextStyle(fontSize: 15)),
+                        DropdownButton<String>(
+                          value: _currentBand,
                           dropdownColor: AppTheme.surfaceDark,
-                          items: _dailyTargets.map((n) {
-                            return DropdownMenuItem(value: n, child: Text('$n từ/ngày'));
-                          }).toList(),
+                          items: const [
+                            DropdownMenuItem(value: '4.5', child: Text('Band 4.5 (Cơ bản / A2)')),
+                            DropdownMenuItem(value: '5.5', child: Text('Band 5.5 (Tiền trung cấp / B1)')),
+                            DropdownMenuItem(value: '6.5', child: Text('Band 6.5 (Trung cấp / B2)')),
+                            DropdownMenuItem(value: '7.5', child: Text('Band 7.5+ (Nâng cao / C1)')),
+                          ],
                           onChanged: (val) async {
                             if (val != null) {
-                              setState(() => _dailyTarget = val);
+                              setState(() => _currentBand = val);
+                              await _testService.saveResult(band: val, score: 10);
                               if (_authService.isLoggedIn) {
-                                await _authService.updateProfile(dailyTarget: val);
+                                await _authService.updateProfile(currentBand: val);
                               }
                               widget.onSettingsChanged?.call();
                             }
@@ -244,6 +367,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                         ),
                       ],
+                    ),
+                    const Divider(height: 20),
+
+                    // Daily Target
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Số từ mục tiêu mỗi ngày:', style: TextStyle(fontSize: 15)),
+                        DropdownButton<int>(
+                          value: _dailyTarget,
+                          dropdownColor: AppTheme.surfaceDark,
+                          items: _dailyTargets.map((n) {
+                            return DropdownMenuItem(value: n, child: Text('$n từ/ngày'));
+                          }).toList(),
+                          onChanged: (val) async {
+                            if (val != null) {
+                              setState(() => _dailyTarget = val);
+                              if (_authService.isLoggedIn) {
+                                await _authService.updateProfile(dailyTarget: val);
+                              }
+                              widget.onSettingsChanged?.call();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+
+                    // Bulk Skip Easy Words Button
+                    OutlinedButton.icon(
+                      onPressed: _isSkipping ? null : _handleSkipWordsBelowBand,
+                      icon: _isSkipping
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.filter_alt_off, size: 18, color: Colors.orangeAccent),
+                      label: Text(
+                        _isSkipping ? 'Đang lọc bỏ...' : 'Bỏ qua tất cả từ vựng dưới Band $_currentBand',
+                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 42),
+                        side: const BorderSide(color: Colors.orangeAccent, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ],
                 ),

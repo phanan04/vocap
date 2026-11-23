@@ -78,10 +78,11 @@ class AuthService {
     }
   }
 
-  /// Update user profile (Target Band, Daily Target, Display Name)
+  /// Update user profile (Target Band, Current Band, Daily Target, Display Name)
   Future<void> updateProfile({
     String? displayName,
     String? targetBand,
+    String? currentBand,
     int? dailyTarget,
   }) async {
     final user = currentUser;
@@ -92,6 +93,7 @@ class AuthService {
     };
     if (displayName != null) updates['display_name'] = displayName;
     if (targetBand != null) updates['target_band'] = targetBand;
+    if (currentBand != null) updates['current_band'] = currentBand;
     if (dailyTarget != null) updates['daily_target'] = dailyTarget;
 
     await _client.from('profiles').update(updates).eq('id', user.id);

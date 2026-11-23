@@ -3,6 +3,7 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import '../services/supabase_service.dart';
 import '../services/progress_service.dart';
 import '../services/auth_service.dart';
+import '../services/placement_test_service.dart';
 import '../models/word_model.dart';
 import '../core/theme/app_theme.dart';
 import 'flashcard_screen.dart';
@@ -10,6 +11,7 @@ import 'quiz_screen.dart';
 import 'topic_explorer_screen.dart';
 import 'auth_screen.dart';
 import 'settings_screen.dart';
+import 'placement_test_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final ProgressService _progressService = ProgressService();
   final AuthService _authService = AuthService();
+  final PlacementTestService _testService = PlacementTestService();
   int _selectedTab = 0;
 
   List<WordModel> _dueWords = [];
@@ -35,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
   int _totalLearned = 0;
   int _totalMastered = 0;
   int _xp = 0;
+
+  // Level & Assessment State
+  String _currentBand = '5.5';
+  String _targetBand = '6.5';
+  bool _hasCompletedPlacementTest = true; // default true to avoid flicker
 
   // User Profile
   Map<String, dynamic>? _userProfile;
@@ -53,6 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final progress = await _progressService.getProgress();
+      final hasCompletedTest = await _testService.hasCompletedTest();
+      final localAssessedBand = await _testService.getAssessedBand();
 
       Map<String, dynamic>? profile;
       int? cloudLearnedToday;
@@ -72,6 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final targetBand = profile != null && profile['target_band'] != null
           ? profile['target_band'] as String
           : '6.5';
+      final currentBand = profile != null && profile['current_band'] != null
+          ? profile['current_band'] as String
+          : (localAssessedBand ?? '5.5');
       final dailyTarget = profile != null && profile['daily_target'] != null
           ? (profile['daily_target'] as num).toInt()
           : (progress['dailyTarget'] as int);
@@ -79,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Call Thematic Adaptive SRS session
       final sessionWords = await _supabaseService.getSmartStudySession(
         targetBand: targetBand,
+        currentBand: currentBand,
         limit: dailyTarget,
       );
 
@@ -86,6 +100,9 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _dailyTarget = dailyTarget;
           _learnedToday = learnedToday;
+          _currentBand = currentBand;
+          _targetBand = targetBand;
+          _hasCompletedPlacementTest = hasCompletedTest;
           _streak = profile != null && profile['streak_count'] != null && (profile['streak_count'] as int) > 0
               ? (profile['streak_count'] as int)
               : (progress['streak'] as int);
@@ -107,6 +124,15 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  void _openPlacementTest() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlacementTestScreen(onTestCompleted: _loadDashboardData),
+      ),
+    ).then((_) => _loadDashboardData());
   }
 
   void _openAuthScreen() {
@@ -241,6 +267,62 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
+              // Placement Test Banner (if test not completed)
+              if (!_hasCompletedPlacementTest)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppTheme.primary.withOpacity(0.25), const Color(0xFF1E293B)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.primary.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.school, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Đánh giá trình độ từ vựng 🎯',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Làm bài test 2 phút để tự động lọc bỏ các từ vựng quá dễ!',
+                              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _openPlacementTest,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('Làm test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Daily Goal Card
               Card(
                 child: Padding(
@@ -359,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Thuật toán Thematic Adaptive SRS tự động ưu tiên ôn từ sắp quên, sau đó cấp từ mới đúng Target Band ${_userProfile?["target_band"] ?? "6.5"} theo cùng 1 chủ đề.',
+                        'Thuật toán Thematic Adaptive SRS tự động ưu tiên ôn từ sắp quên, cấp từ mới đúng trình độ Band $_currentBand ➔ Mục tiêu Band $_targetBand theo từng chủ đề.',
                         style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                       ),
                       const SizedBox(height: 16),
