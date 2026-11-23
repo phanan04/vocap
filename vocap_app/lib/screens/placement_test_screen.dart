@@ -417,7 +417,7 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
                         children: [
                           const Text('Mục tiêu IELTS của bạn:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                           DropdownButton<String>(
-                            value: _targetBand,
+                            value: _targetBands.contains(_targetBand) ? _targetBand : '6.5',
                             dropdownColor: AppTheme.surfaceDark,
                             items: _targetBands.map((b) => DropdownMenuItem(value: b, child: Text('Band $b'))).toList(),
                             onChanged: (val) {
@@ -434,7 +434,7 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
                         children: [
                           const Text('Mục tiêu mỗi ngày:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                           DropdownButton<int>(
-                            value: _dailyTarget,
+                            value: _dailyTargets.contains(_dailyTarget) ? _dailyTarget : 10,
                             dropdownColor: AppTheme.surfaceDark,
                             items: _dailyTargets.map((n) => DropdownMenuItem(value: n, child: Text('$n từ/ngày'))).toList(),
                             onChanged: (val) {
@@ -515,20 +515,28 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
                   children: [
                     const Text('Hoặc tự chọn trình độ hiện tại của bạn:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 8),
-                    DropdownButton<String>(
-                      isExpanded: true,
-                      value: _manualSelectedBand,
-                      dropdownColor: AppTheme.surfaceDark,
-                      items: const [
-                        DropdownMenuItem(value: '4.5', child: Text('Band 4.5 (Cơ bản / A2 - Bỏ qua A1)')),
-                        DropdownMenuItem(value: '5.5', child: Text('Band 5.5 (Tiền trung cấp / B1 - Bỏ qua A1, A2)')),
-                        DropdownMenuItem(value: '6.5', child: Text('Band 6.5 (Trung cấp / B2 - Bỏ qua A1, A2, B1)')),
-                        DropdownMenuItem(value: '7.5', child: Text('Band 7.5+ (Nâng cao / C1 - Bỏ qua từ dưới C1)')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _manualSelectedBand = val);
-                      },
-                    ),
+                    Builder(builder: (context) {
+                      const availableManualBands = ['4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0'];
+                      final effectiveManualBand = availableManualBands.contains(_manualSelectedBand) ? _manualSelectedBand : '6.0';
+                      return DropdownButton<String>(
+                        isExpanded: true,
+                        value: effectiveManualBand,
+                        dropdownColor: AppTheme.surfaceDark,
+                        items: const [
+                          DropdownMenuItem(value: '4.5', child: Text('Band 4.5 (Cơ bản / A2 - Bỏ qua A1)')),
+                          DropdownMenuItem(value: '5.0', child: Text('Band 5.0 (Cơ bản / B1 - Bỏ qua A1)')),
+                          DropdownMenuItem(value: '5.5', child: Text('Band 5.5 (Tiền trung cấp / B1 - Bỏ qua A1, A2)')),
+                          DropdownMenuItem(value: '6.0', child: Text('Band 6.0 (Trung cấp / B2 - Bỏ qua A1, A2)')),
+                          DropdownMenuItem(value: '6.5', child: Text('Band 6.5 (Khá / B2 - Bỏ qua A1, A2, B1)')),
+                          DropdownMenuItem(value: '7.0', child: Text('Band 7.0 (Khá giỏi / C1 - Bỏ qua A1 - B1)')),
+                          DropdownMenuItem(value: '7.5', child: Text('Band 7.5+ (Nâng cao / C1 - Bỏ qua từ dưới C1)')),
+                          DropdownMenuItem(value: '8.0', child: Text('Band 8.0+ (Xuất sắc / C2 - Bỏ qua từ dưới C2)')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _manualSelectedBand = val);
+                        },
+                      );
+                    }),
                     const SizedBox(height: 10),
                     OutlinedButton(
                       onPressed: _isApplying ? null : () => _applyResult(_manualSelectedBand, score: 10),

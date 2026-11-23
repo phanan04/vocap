@@ -33,7 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSkipping = false;
 
   final List<String> _targetBands = ['5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
-  final List<String> _currentBands = ['4.5', '5.5', '6.5', '7.5'];
+  final List<String> _currentBands = ['4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0'];
   final List<int> _dailyTargets = [5, 10, 15, 20, 25, 30];
 
   @override
@@ -317,57 +317,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // Current Band
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Trình độ hiện tại:', style: TextStyle(fontSize: 15)),
-                        DropdownButton<String>(
-                          value: _currentBand,
-                          dropdownColor: AppTheme.surfaceDark,
-                          items: const [
-                            DropdownMenuItem(value: '4.5', child: Text('Band 4.5 (Cơ bản / A2)')),
-                            DropdownMenuItem(value: '5.5', child: Text('Band 5.5 (Tiền trung cấp / B1)')),
-                            DropdownMenuItem(value: '6.5', child: Text('Band 6.5 (Trung cấp / B2)')),
-                            DropdownMenuItem(value: '7.5', child: Text('Band 7.5+ (Nâng cao / C1)')),
-                          ],
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(() => _currentBand = val);
-                              await _testService.saveResult(band: val, score: 10);
-                              if (_authService.isLoggedIn) {
-                                await _authService.updateProfile(currentBand: val);
+                    Builder(builder: (context) {
+                      final effectiveCurrentBand = _currentBands.contains(_currentBand) ? _currentBand : '6.0';
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Trình độ hiện tại:', style: TextStyle(fontSize: 15)),
+                          DropdownButton<String>(
+                            value: effectiveCurrentBand,
+                            dropdownColor: AppTheme.surfaceDark,
+                            items: const [
+                              DropdownMenuItem(value: '4.5', child: Text('Band 4.5 (Cơ bản / A2)')),
+                              DropdownMenuItem(value: '5.0', child: Text('Band 5.0 (Cơ bản / B1)')),
+                              DropdownMenuItem(value: '5.5', child: Text('Band 5.5 (Tiền trung cấp / B1)')),
+                              DropdownMenuItem(value: '6.0', child: Text('Band 6.0 (Trung cấp / B2)')),
+                              DropdownMenuItem(value: '6.5', child: Text('Band 6.5 (Khá / B2)')),
+                              DropdownMenuItem(value: '7.0', child: Text('Band 7.0 (Khá giỏi / C1)')),
+                              DropdownMenuItem(value: '7.5', child: Text('Band 7.5+ (Nâng cao / C1)')),
+                              DropdownMenuItem(value: '8.0', child: Text('Band 8.0+ (Xuất sắc / C2)')),
+                            ],
+                            onChanged: (val) async {
+                              if (val != null) {
+                                setState(() => _currentBand = val);
+                                await _testService.saveResult(band: val, score: 10);
+                                if (_authService.isLoggedIn) {
+                                  await _authService.updateProfile(currentBand: val);
+                                }
+                                widget.onSettingsChanged?.call();
                               }
-                              widget.onSettingsChanged?.call();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                            },
+                          ),
+                        ],
+                      );
+                    }),
                     const Divider(height: 20),
 
                     // Target Band
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Mục tiêu Band IELTS:', style: TextStyle(fontSize: 15)),
-                        DropdownButton<String>(
-                          value: _targetBand,
-                          dropdownColor: AppTheme.surfaceDark,
-                          items: _targetBands.map((b) {
-                            return DropdownMenuItem(value: b, child: Text('Band $b'));
-                          }).toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(() => _targetBand = val);
-                              if (_authService.isLoggedIn) {
-                                await _authService.updateProfile(targetBand: val);
+                    Builder(builder: (context) {
+                      final effectiveTargetBand = _targetBands.contains(_targetBand) ? _targetBand : '6.5';
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Mục tiêu Band IELTS:', style: TextStyle(fontSize: 15)),
+                          DropdownButton<String>(
+                            value: effectiveTargetBand,
+                            dropdownColor: AppTheme.surfaceDark,
+                            items: _targetBands.map((b) {
+                              return DropdownMenuItem(value: b, child: Text('Band $b'));
+                            }).toList(),
+                            onChanged: (val) async {
+                              if (val != null) {
+                                setState(() => _targetBand = val);
+                                if (_authService.isLoggedIn) {
+                                  await _authService.updateProfile(targetBand: val);
+                                }
+                                widget.onSettingsChanged?.call();
                               }
-                              widget.onSettingsChanged?.call();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                            },
+                          ),
+                        ],
+                      );
+                    }),
                     const Divider(height: 20),
 
                     // Daily Target
