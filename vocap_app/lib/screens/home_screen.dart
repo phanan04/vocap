@@ -175,7 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeTab() {
-    final progressPercent = _dailyTarget > 0 ? (_learnedToday / _dailyTarget).clamp(0.0, 1.0) : 0.0;
+    final displayLearned = _dailyTarget > 0 ? _learnedToday.clamp(0, _dailyTarget) : _learnedToday;
+    final progressPercent = _dailyTarget > 0 ? (displayLearned / _dailyTarget).clamp(0.0, 1.0) : 0.0;
     final userName = _userProfile?['display_name'] ?? (_authService.isLoggedIn ? 'Học viên' : 'Khách');
 
     return SafeArea(
@@ -266,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         lineWidth: 8,
                         percent: progressPercent,
                         center: Text(
-                          '$_learnedToday/$_dailyTarget',
+                          '$displayLearned/$_dailyTarget',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         progressColor: AppTheme.primary,
@@ -281,9 +282,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Text('Mục tiêu hàng ngày', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text(
-                              _learnedToday >= _dailyTarget
+                              displayLearned >= _dailyTarget
                                   ? '🎉 Xuất sắc! Bạn đã đạt mục tiêu $_dailyTarget từ hôm nay!'
-                                  : 'Đã ôn $_learnedToday/$_dailyTarget từ. Còn ${_dailyTarget - _learnedToday} từ nữa để hoàn thành mục tiêu!',
+                                  : 'Đã ôn $displayLearned/$_dailyTarget từ. Còn ${_dailyTarget - displayLearned} từ nữa để hoàn thành mục tiêu!',
                               style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                             ),
                           ],
@@ -634,30 +635,115 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            // Target Band Card
+            // Study Goals & Level Card
             Card(
+              color: const Color(0xFF1E293B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: const [
-                        Icon(Icons.flag, color: AppTheme.accent),
-                        SizedBox(width: 10),
-                        Text('Mục tiêu IELTS (Target Band):', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.track_changes, color: AppTheme.primary, size: 22),
+                            SizedBox(width: 8),
+                            Text('Lộ trình & Trình độ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ],
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SettingsScreen(onSettingsChanged: _loadDashboardData),
+                              ),
+                            ).then((_) => _loadDashboardData());
+                          },
+                          child: const Text('Cài đặt ➔', style: TextStyle(color: AppTheme.primary, fontSize: 13)),
+                        ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.getBandColor(targetBand).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.getBandColor(targetBand)),
-                      ),
-                      child: Text(
-                        'Band $targetBand',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.getBandColor(targetBand)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Trình độ', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                const SizedBox(height: 4),
+                                Text('Band $_currentBand', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF10B981))),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Mục tiêu', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                const SizedBox(height: 4),
+                                Text('Band $_targetBand', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF38BDF8))),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Mỗi ngày', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                const SizedBox(height: 4),
+                                Text('$_dailyTarget từ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFF59E0B))),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PlacementTestScreen(onTestCompleted: _loadDashboardData),
+                          ),
+                        ).then((_) => _loadDashboardData());
+                      },
+                      icon: const Icon(Icons.quiz, size: 18, color: AppTheme.primary),
+                      label: const Text('Làm bài test đánh giá lại trình độ', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 42),
+                        side: BorderSide(color: AppTheme.primary.withOpacity(0.6)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ],

@@ -105,9 +105,9 @@ class _QuizScreenState extends State<QuizScreen> {
       if (isCorrect) _score++;
     });
 
-    // Record SRS review
+    // Record SRS review (XP and SM-2 update, without inflating daily new-word counter)
     final currentWord = widget.words[_currentIndex];
-    await _progressService.recordReview(currentWord.id, isCorrect ? 4 : 1);
+    await _progressService.recordReview(currentWord.id, isCorrect ? 4 : 1, countTowardsDaily: false);
     _supabaseService.submitSrsReview(
       wordId: currentWord.id,
       quality: isCorrect ? 4 : 1,

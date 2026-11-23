@@ -63,7 +63,7 @@ class ProgressService {
     };
   }
 
-  Future<void> recordReview(int wordId, int quality) async {
+  Future<void> recordReview(int wordId, int quality, {bool countTowardsDaily = true}) async {
     final prefs = await SharedPreferences.getInstance();
     final today = _todayString();
     final lastDate = prefs.getString(_keyLastDate) ?? '';
@@ -81,11 +81,13 @@ class ProgressService {
       await prefs.setStringList(_keyTodayWordIds, []);
     }
 
-    // Track unique words learned today (Unique Words Count)
-    final todayWordsSet = (prefs.getStringList(_keyTodayWordIds) ?? []).toSet();
-    todayWordsSet.add(wordId.toString());
-    await prefs.setStringList(_keyTodayWordIds, todayWordsSet.toList());
-    await prefs.setInt(_keyLearnedToday, todayWordsSet.length);
+    // Track unique words learned today only if part of the daily study session
+    if (countTowardsDaily) {
+      final todayWordsSet = (prefs.getStringList(_keyTodayWordIds) ?? []).toSet();
+      todayWordsSet.add(wordId.toString());
+      await prefs.setStringList(_keyTodayWordIds, todayWordsSet.toList());
+      await prefs.setInt(_keyLearnedToday, todayWordsSet.length);
+    }
 
     // Track total unique learned words
     final learnedSet = (prefs.getStringList(_keyTotalLearned) ?? []).toSet();

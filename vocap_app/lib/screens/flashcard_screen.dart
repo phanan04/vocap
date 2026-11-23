@@ -6,6 +6,7 @@ import '../services/progress_service.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/audio_play_button.dart';
 import '../widgets/ielts_band_badge.dart';
+import 'quiz_screen.dart';
 
 class FlashcardScreen extends StatefulWidget {
   final List<WordModel> words;
@@ -115,28 +116,56 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('🎉 Chúc mừng!', textAlign: TextAlign.center),
+        title: const Text('🎉 Chúc mừng!', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.stars, color: Colors.amber, size: 60),
+            const Icon(Icons.stars, color: Colors.amber, size: 64),
             const SizedBox(height: 16),
             Text(
-              'Bạn đã hoàn thành phiên ôn tập ${widget.words.length} từ vựng!',
+              'Bạn đã nạp xong ${widget.words.length} từ vựng!',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Làm ngay bài trắc nghiệm nhanh để kiểm tra phản xạ và khắc sâu trí nhớ nhé!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppTheme.textMuted, height: 1.3),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => QuizScreen(
+                      words: widget.words,
+                      title: 'Củng Cố ${widget.words.length} Từ Vừa Học',
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.quiz, size: 18),
+              label: const Text('Củng Cố Bằng Bài Quiz ➔', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 46),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              },
+              child: const Text('Về Trang Chủ', style: TextStyle(color: AppTheme.textMuted)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-            },
-            child: const Text('Về Trang Chủ', style: TextStyle(color: AppTheme.primary)),
-          ),
-        ],
       ),
     );
   }

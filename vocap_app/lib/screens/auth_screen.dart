@@ -5,8 +5,9 @@ import 'placement_test_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback? onAuthSuccess;
+  final bool initialIsSignUp;
 
-  const AuthScreen({super.key, this.onAuthSuccess});
+  const AuthScreen({super.key, this.onAuthSuccess, this.initialIsSignUp = false});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -16,9 +17,15 @@ class _AuthScreenState extends State<AuthScreen> {
   final AuthService _authService = AuthService();
   final _formKey = GlobalKey<FormState>();
 
-  bool _isSignUp = false;
+  late bool _isSignUp;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _isSignUp = widget.initialIsSignUp;
+  }
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
