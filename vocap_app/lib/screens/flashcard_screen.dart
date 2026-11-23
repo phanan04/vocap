@@ -60,7 +60,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
     final currentWord = widget.words[_currentIndex];
 
     // Record progress locally
-    _progressService.recordReview(currentWord.id, quality);
+    await _progressService.recordReview(currentWord.id, quality);
 
     // Submit to Supabase SM-2 SRS engine in background
     _supabaseService.submitSrsReview(
@@ -84,7 +84,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
     final currentWord = widget.words[_currentIndex];
 
     // Record progress locally
-    _progressService.recordReview(currentWord.id, 4);
+    await _progressService.recordReview(currentWord.id, 4);
 
     // Call Supabase RPC
     _supabaseService.markWordAsKnown(currentWord.id);

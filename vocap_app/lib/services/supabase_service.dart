@@ -336,4 +336,38 @@ class SupabaseService {
       return submitSrsReview(wordId: wordId, quality: 4, reviewType: 'mastered');
     }
   }
+
+  /// Get count of words learned or reviewed today from Supabase Cloud
+  Future<int?> getTodayLearnedCount() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    try {
+      final now = DateTime.now().toUtc();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // 1. Check study_logs for today
+      final res = await _client
+          .from('study_logs')
+          .select('words_reviewed')
+          .eq('user_id', user.id)
+          .eq('study_date', todayStr)
+          .maybeSingle();
+
+      if (res != null && res['words_reviewed'] != null) {
+        return (res['words_reviewed'] as num).toInt();
+      }
+
+      // 2. Fallback: check count of user_words reviewed today
+      final countRes = await _client
+          .from('user_words')
+          .select('id')
+          .eq('user_id', user.id)
+          .gte('last_reviewed_at', '${todayStr}T00:00:00Z');
+
+      return (countRes as List).length;
+    } catch (_) {
+      return null;
+    }
+  }
 }

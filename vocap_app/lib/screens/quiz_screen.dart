@@ -95,7 +95,7 @@ class _QuizScreenState extends State<QuizScreen> {
     setState(() {});
   }
 
-  void _handleOptionSelect(String option) {
+  Future<void> _handleOptionSelect(String option) async {
     if (_answered) return;
 
     final isCorrect = (option == _correctAnswer);
@@ -107,7 +107,7 @@ class _QuizScreenState extends State<QuizScreen> {
 
     // Record SRS review
     final currentWord = widget.words[_currentIndex];
-    _progressService.recordReview(currentWord.id, isCorrect ? 4 : 1);
+    await _progressService.recordReview(currentWord.id, isCorrect ? 4 : 1);
     _supabaseService.submitSrsReview(
       wordId: currentWord.id,
       quality: isCorrect ? 4 : 1,

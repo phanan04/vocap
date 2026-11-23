@@ -55,8 +55,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final progress = await _progressService.getProgress();
 
       Map<String, dynamic>? profile;
+      int? cloudLearnedToday;
       if (_authService.isLoggedIn) {
         profile = await _authService.getUserProfile();
+        cloudLearnedToday = await _supabaseService.getTodayLearnedCount();
+        if (cloudLearnedToday != null && cloudLearnedToday > 0) {
+          await _progressService.syncCloudLearnedCount(cloudLearnedToday);
+        }
+      }
+
+      int learnedToday = progress['learnedToday'] as int;
+      if (cloudLearnedToday != null && cloudLearnedToday > learnedToday) {
+        learnedToday = cloudLearnedToday;
       }
 
       final targetBand = profile != null && profile['target_band'] != null
@@ -75,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _dailyTarget = dailyTarget;
-          _learnedToday = progress['learnedToday'] as int;
+          _learnedToday = learnedToday;
           _streak = profile != null && profile['streak_count'] != null && (profile['streak_count'] as int) > 0
               ? (profile['streak_count'] as int)
               : (progress['streak'] as int);

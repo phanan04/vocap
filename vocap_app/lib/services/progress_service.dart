@@ -24,25 +24,30 @@ class ProgressService {
     final today = _todayString();
     final lastDate = prefs.getString(_keyLastDate) ?? '';
 
-    final todayWordsSet = (prefs.getStringList(_keyTodayWordIds) ?? []).toSet();
-    int learnedToday = todayWordsSet.length;
-    int streak = prefs.getInt(_keyStreak) ?? 0;
-
-    // Reset daily counter if a new day
-    if (lastDate != today) {
+    // Reset daily counter only if it is genuinely a new day
+    if (lastDate.isNotEmpty && lastDate != today) {
       final lastDateTime = DateTime.tryParse(lastDate);
       if (lastDateTime != null) {
         final diff = DateTime.now().difference(lastDateTime).inDays;
         if (diff > 1) {
-          streak = 0; // Streak broken
+          await prefs.setInt(_keyStreak, 0); // Streak broken
         }
       }
-      todayWordsSet.clear();
       await prefs.setStringList(_keyTodayWordIds, []);
       await prefs.setInt(_keyLearnedToday, 0);
-      learnedToday = 0;
     }
 
+    // Always ensure lastDate is saved as today
+    await prefs.setString(_keyLastDate, today);
+
+    final todayWordsSet = (prefs.getStringList(_keyTodayWordIds) ?? []).toSet();
+    int learnedToday = todayWordsSet.length;
+    final savedLearnedToday = prefs.getInt(_keyLearnedToday) ?? 0;
+    if (savedLearnedToday > learnedToday) {
+      learnedToday = savedLearnedToday;
+    }
+
+    final streak = prefs.getInt(_keyStreak) ?? 0;
     final dailyTarget = prefs.getInt(_keyDailyTarget) ?? 10;
     final totalLearned = prefs.getStringList(_keyTotalLearned)?.length ?? 0;
     final totalMastered = prefs.getStringList(_keyMastered)?.length ?? 0;
@@ -73,6 +78,7 @@ class ProgressService {
       }
       await prefs.setString(_keyLastDate, today);
       await prefs.setInt(_keyStreak, streak);
+      await prefs.setStringList(_keyTodayWordIds, []);
     }
 
     // Track unique words learned today (Unique Words Count)
@@ -97,5 +103,17 @@ class ProgressService {
     final xpGain = quality >= 3 ? 10 : 5;
     int currentXp = (prefs.getInt(_keyXp) ?? 0) + xpGain;
     await prefs.setInt(_keyXp, currentXp);
+  }
+
+  /// Sync cloud learned count into local storage to avoid discrepancies
+  Future<void> syncCloudLearnedCount(int cloudCount) async {
+    if (cloudCount <= 0) return;
+    final prefs = await SharedPreferences.getInstance();
+    final today = _todayString();
+    await prefs.setString(_keyLastDate, today);
+    final currentLearned = prefs.getInt(_keyLearnedToday) ?? 0;
+    if (cloudCount > currentLearned) {
+      await prefs.setInt(_keyLearnedToday, cloudCount);
+    }
   }
 }
