@@ -16,14 +16,16 @@ enum QuizMode {
 
 class QuizScreen extends StatefulWidget {
   final List<WordModel> words;
-  final List<WordModel> distractorPool;
+  final List<WordModel>? distractorPool;
   final QuizMode mode;
+  final String? title;
 
   const QuizScreen({
     super.key,
     required this.words,
-    required this.distractorPool,
+    this.distractorPool,
     this.mode = QuizMode.meaningToWord,
+    this.title,
   });
 
   @override
@@ -56,13 +58,17 @@ class _QuizScreenState extends State<QuizScreen> {
     _answered = false;
     _selectedAnswer = null;
 
+    final effectivePool = (widget.distractorPool != null && widget.distractorPool!.isNotEmpty)
+        ? widget.distractorPool!
+        : widget.words;
+
     final Set<String> optionsSet = {};
     if (widget.mode == QuizMode.meaningToWord || widget.mode == QuizMode.listening || widget.mode == QuizMode.fillBlank) {
       _correctAnswer = targetWord.word;
       optionsSet.add(_correctAnswer);
 
       // Pick 3 distractors
-      final shuffledPool = List<WordModel>.from(widget.distractorPool)..shuffle(_random);
+      final shuffledPool = List<WordModel>.from(effectivePool)..shuffle(_random);
       for (final w in shuffledPool) {
         if (w.word != targetWord.word && !optionsSet.contains(w.word)) {
           optionsSet.add(w.word);
@@ -74,7 +80,7 @@ class _QuizScreenState extends State<QuizScreen> {
       _correctAnswer = targetWord.meaningVi;
       optionsSet.add(_correctAnswer);
 
-      final shuffledPool = List<WordModel>.from(widget.distractorPool)..shuffle(_random);
+      final shuffledPool = List<WordModel>.from(effectivePool)..shuffle(_random);
       for (final w in shuffledPool) {
         if (w.meaningVi != targetWord.meaningVi && !optionsSet.contains(w.meaningVi)) {
           optionsSet.add(w.meaningVi);
@@ -175,7 +181,9 @@ class _QuizScreenState extends State<QuizScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Câu ${_currentIndex + 1}/${widget.words.length}'),
+        title: Text(widget.title != null
+            ? '${widget.title} (${_currentIndex + 1}/${widget.words.length})'
+            : 'Câu ${_currentIndex + 1}/${widget.words.length}'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
