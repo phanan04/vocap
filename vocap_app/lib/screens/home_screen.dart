@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 import '../services/progress_service.dart';
 import '../services/auth_service.dart';
@@ -96,10 +97,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ? (profile['daily_target'] as num).toInt()
           : (progress['dailyTarget'] as int);
 
+      final prefs = await SharedPreferences.getInstance();
+      final autoSkip = prefs.getBool('auto_skip_below_band') ?? true;
+      final effectiveStudyBand = autoSkip ? currentBand : '4.0';
+
       // Call Thematic Adaptive SRS session
       final sessionWords = await _supabaseService.getSmartStudySession(
         targetBand: targetBand,
-        currentBand: currentBand,
+        currentBand: effectiveStudyBand,
         limit: dailyTarget,
       );
 

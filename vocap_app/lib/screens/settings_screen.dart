@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/offline_service.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
@@ -31,6 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _cachedWordsCount = 0;
   bool _isSyncing = false;
   bool _isSkipping = false;
+  bool _hasCompletedTest = false;
+  bool _autoSkipBelowBand = true;
 
   final List<String> _targetBands = ['5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
   final List<String> _currentBands = ['4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0'];
@@ -47,8 +50,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final pending = await _offlineService.getPendingQueueCount();
     final cached = await _offlineService.getCachedWords();
     final localAssessedBand = await _testService.getAssessedBand();
+    final hasCompletedLocal = await _testService.hasCompletedTest();
+    final prefs = await SharedPreferences.getInstance();
+    final autoSkip = prefs.getBool('auto_skip_below_band') ?? true;
 
     String currentBand = localAssessedBand ?? '5.5';
+    bool hasCompleted = hasCompletedLocal || localAssessedBand != null;
 
     if (_authService.isLoggedIn) {
       final profile = await _authService.getUserProfile();
@@ -61,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
         if (profile['current_band'] != null) {
           currentBand = profile['current_band'] as String;
+          hasCompleted = true;
         }
       }
     }
@@ -72,51 +80,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _pendingSyncCount = pending;
         _cachedWordsCount = cached.length;
         _currentBand = currentBand;
+        _hasCompletedTest = hasCompleted;
+        _autoSkipBelowBand = autoSkip;
       });
     }
   }
 
-  Future<void> _handleSkipWordsBelowBand() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Bỏ qua từ vựng cơ bản?'),
-        content: Text(
-          'Hệ thống sẽ đánh dấu toàn bộ từ vựng dưới trình độ Band $_currentBand là "Đã thuộc".\n\nCác từ quá dễ này sẽ không còn xuất hiện trong các bài học hàng ngày nữa.',
-          style: const TextStyle(fontSize: 14, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Hủy', style: TextStyle(color: AppTheme.textMuted)),
+  Future<void> _toggleAutoSkip(bool val) async {
+    setState(() => _autoSkipBelowBand = val);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_skip_below_band', val);
+
+    if (val) {
+      setState(() => _isSkipping = true);
+      final res = await _supabaseService.skipWordsBelowBand(_currentBand);
+      final skippedCount = res['skipped_count'] ?? 0;
+      if (mounted) {
+        setState(() => _isSkipping = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Đã bật tự động bỏ qua từ vựng dưới Band $_currentBand ($skippedCount từ)'),
+            backgroundColor: Colors.green.shade800,
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
-            child: const Text('Đồng ý bỏ qua'),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã tắt tự động bỏ qua từ vựng cơ bản'),
           ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isSkipping = true);
-    final res = await _supabaseService.skipWordsBelowBand(_currentBand);
-    final skippedCount = res['skipped_count'] ?? 0;
-
-    if (mounted) {
-      setState(() => _isSkipping = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Đã lọc bỏ thành công $skippedCount từ vựng dưới Band $_currentBand!'),
-          backgroundColor: Colors.green.shade800,
-        ),
-      );
-      widget.onSettingsChanged?.call();
+        );
+      }
     }
+    widget.onSettingsChanged?.call();
   }
 
   Future<void> _pickReminderTime() async {
@@ -253,68 +250,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Placement Test Shortcut Card
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [AppTheme.primary.withOpacity(0.2), Colors.transparent],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                    // Placement Test Shortcut Card (only show if not yet completed)
+                    if (!_hasCompletedTest) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppTheme.primary.withOpacity(0.2), Colors.transparent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary,
-                              borderRadius: BorderRadius.circular(10),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.quiz, color: Colors.white, size: 22),
                             ),
-                            child: const Icon(Icons.quiz, color: Colors.white, size: 22),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text('Đánh giá trình độ (2 phút)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                SizedBox(height: 2),
-                                Text('Làm bài test 15 câu để Vocap lọc bỏ các từ quá dễ', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-                              ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text('Đánh giá trình độ (2 phút)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  SizedBox(height: 2),
+                                  Text('Làm bài test 20 câu để Vocap lọc bỏ các từ quá dễ', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                ],
+                              ),
                             ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PlacementTestScreen(
-                                    onTestCompleted: () {
-                                      _loadSettings();
-                                      widget.onSettingsChanged?.call();
-                                    },
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PlacementTestScreen(
+                                      onTestCompleted: () {
+                                        _loadSettings();
+                                        widget.onSettingsChanged?.call();
+                                      },
+                                    ),
                                   ),
-                                ),
-                              ).then((_) {
-                                _loadSettings();
-                                widget.onSettingsChanged?.call();
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ).then((_) {
+                                  _loadSettings();
+                                  widget.onSettingsChanged?.call();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: const Text('Làm Test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
-                            child: const Text('Làm Test', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Current Band
                     Builder(builder: (context) {
@@ -342,6 +341,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 await _testService.saveResult(band: val, score: 10);
                                 if (_authService.isLoggedIn) {
                                   await _authService.updateProfile(currentBand: val);
+                                }
+                                if (_autoSkipBelowBand) {
+                                  await _supabaseService.skipWordsBelowBand(val);
                                 }
                                 widget.onSettingsChanged?.call();
                               }
@@ -403,24 +405,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ],
                     ),
-                    const Divider(height: 24),
+                    const Divider(height: 20),
 
-                    // Bulk Skip Easy Words Button
-                    OutlinedButton.icon(
-                      onPressed: _isSkipping ? null : _handleSkipWordsBelowBand,
-                      icon: _isSkipping
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.filter_alt_off, size: 18, color: Colors.orangeAccent),
-                      label: Text(
-                        _isSkipping ? 'Đang lọc bỏ...' : 'Bỏ qua tất cả từ vựng dưới Band $_currentBand',
-                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                    // Auto Skip Toggle Switch
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Bỏ qua từ vựng dưới Band $_currentBand',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            ),
+                          ),
+                          if (_isSkipping)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                        ],
                       ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 42),
-                        side: const BorderSide(color: Colors.orangeAccent, width: 1.2),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      subtitle: Text(
+                        _autoSkipBelowBand
+                            ? 'Tự động lọc bỏ các từ vựng cơ bản khỏi bài học hàng ngày'
+                            : 'Không lọc bỏ (học tất cả từ vựng bao gồm cả cơ bản)',
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                       ),
+                      value: _autoSkipBelowBand,
+                      activeColor: AppTheme.primary,
+                      onChanged: _isSkipping ? null : _toggleAutoSkip,
                     ),
+
+                    if (_hasCompletedTest) ...[
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PlacementTestScreen(
+                                  onTestCompleted: () {
+                                    _loadSettings();
+                                    widget.onSettingsChanged?.call();
+                                  },
+                                ),
+                              ),
+                            ).then((_) {
+                              _loadSettings();
+                              widget.onSettingsChanged?.call();
+                            });
+                          },
+                          icon: const Icon(Icons.refresh, size: 15, color: AppTheme.textMuted),
+                          label: const Text('Làm lại bài test đánh giá trình độ', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 30),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
