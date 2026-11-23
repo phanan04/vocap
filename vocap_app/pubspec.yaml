@@ -1,0 +1,39 @@
+name: vocap_app
+description: "Vocap - IELTS Spaced Repetition Vocabulary Learning App"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Backend & Database
+  supabase_flutter: ^2.8.0
+
+  # Audio Streaming & Playback
+  audioplayers: ^6.1.0
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # UI Components & Icons
+  google_fonts: ^6.2.1
+  lucide_icons: ^0.257.0
+  flutter_card_swiper: ^7.0.0
+  percent_indicator: ^4.2.3
+  flutter_animate: ^4.5.2
+
+  # Utilities
+  intl: ^0.19.0
+  shared_preferences: ^2.3.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
