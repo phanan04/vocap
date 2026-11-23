@@ -389,4 +389,31 @@ class SupabaseService {
       return null;
     }
   }
+
+  /// Get real user stats from Supabase (actual words learned & mastered)
+  Future<Map<String, int>?> getUserCloudStats() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    try {
+      final learnedRes = await _client
+          .from('user_words')
+          .select('id')
+          .eq('user_id', user.id)
+          .neq('status', 'mastered');
+
+      final masteredRes = await _client
+          .from('user_words')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('status', 'mastered');
+
+      return {
+        'totalLearned': (learnedRes as List).length,
+        'totalMastered': (masteredRes as List).length,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
 }

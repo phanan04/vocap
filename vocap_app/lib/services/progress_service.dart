@@ -107,6 +107,18 @@ class ProgressService {
     await prefs.setInt(_keyXp, currentXp);
   }
 
+  /// Clear all local progress keys (used on logout or new account creation)
+  Future<void> clearLocalProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyLearnedToday);
+    await prefs.remove(_keyTodayWordIds);
+    await prefs.remove(_keyTotalLearned);
+    await prefs.remove(_keyMastered);
+    await prefs.remove(_keyXp);
+    await prefs.remove(_keyStreak);
+    await prefs.remove(_keyLastDate);
+  }
+
   /// Sync cloud learned count into local storage to avoid discrepancies
   Future<void> syncCloudLearnedCount(int cloudCount) async {
     if (cloudCount <= 0) return;

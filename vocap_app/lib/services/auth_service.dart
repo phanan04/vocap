@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'progress_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -21,6 +22,9 @@ class AuthService {
     String targetBand = '6.5',
     int dailyTarget = 10,
   }) async {
+    // Clear previous guest/device progress so new user starts completely clean
+    await ProgressService().clearLocalProgress();
+
     final response = await _client.auth.signUp(
       email: email.trim(),
       password: password,
@@ -30,10 +34,6 @@ class AuthService {
         'daily_target': dailyTarget,
       },
     );
-
-    if (response.user != null) {
-      await syncLocalProgressToCloud();
-    }
 
     return response;
   }
@@ -48,16 +48,13 @@ class AuthService {
       password: password,
     );
 
-    if (response.user != null) {
-      await syncLocalProgressToCloud();
-    }
-
     return response;
   }
 
   /// Sign Out
   Future<void> signOut() async {
     await _client.auth.signOut();
+    await ProgressService().clearLocalProgress();
   }
 
   /// Fetch user profile from Supabase profiles table

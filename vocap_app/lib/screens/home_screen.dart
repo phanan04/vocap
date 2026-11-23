@@ -64,9 +64,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       Map<String, dynamic>? profile;
       int? cloudLearnedToday;
+      Map<String, int>? cloudStats;
       if (_authService.isLoggedIn) {
         profile = await _authService.getUserProfile();
         cloudLearnedToday = await _supabaseService.getTodayLearnedCount();
+        cloudStats = await _supabaseService.getUserCloudStats();
         if (cloudLearnedToday != null && cloudLearnedToday > 0) {
           await _progressService.syncCloudLearnedCount(cloudLearnedToday);
         }
@@ -76,6 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (cloudLearnedToday != null && cloudLearnedToday > learnedToday) {
         learnedToday = cloudLearnedToday;
       }
+
+      final totalLearned = cloudStats != null
+          ? cloudStats['totalLearned']!
+          : (progress['totalLearned'] as int);
+      final totalMastered = cloudStats != null
+          ? cloudStats['totalMastered']!
+          : (progress['totalMastered'] as int);
 
       final targetBand = profile != null && profile['target_band'] != null
           ? profile['target_band'] as String
@@ -103,8 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _streak = profile != null && profile['streak_count'] != null && (profile['streak_count'] as int) > 0
               ? (profile['streak_count'] as int)
               : (progress['streak'] as int);
-          _totalLearned = progress['totalLearned'] as int;
-          _totalMastered = progress['totalMastered'] as int;
+          _totalLearned = totalLearned;
+          _totalMastered = totalMastered;
           _xp = profile != null && profile['xp_points'] != null && (profile['xp_points'] as int) > 0
               ? (profile['xp_points'] as int)
               : (progress['xp'] as int);

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/linear_percent_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/placement_test_service.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
 import '../core/theme/app_theme.dart';
+import 'home_screen.dart';
 
 class PlacementTestScreen extends StatefulWidget {
   final bool isInitialOnboarding;
@@ -115,10 +117,21 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
         }
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_seen_welcome', true);
+
       widget.onTestCompleted?.call();
 
       if (mounted) {
-        Navigator.pop(context, true);
+        if (widget.isInitialOnboarding) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pop(context, true);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -462,7 +475,7 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
                           child: const Text('KHUYÊN DÙNG', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
                         ),
                         const SizedBox(width: 8),
-                        const Text('Kiểm tra trình độ (15 câu / 2 phút)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const Text('Kiểm tra trình độ (20 câu chuẩn IELTS)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ],
                     ),
                     const SizedBox(height: 8),
