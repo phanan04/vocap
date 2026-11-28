@@ -54,6 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final autoSkip = prefs.getBool('auto_skip_below_band') ?? true;
 
+    int dailyTarget = prefs.getInt('daily_target') ?? 10;
+    String targetBand = prefs.getString('target_band') ?? '6.5';
     String currentBand = localAssessedBand ?? '5.5';
     bool hasCompleted = hasCompletedLocal || localAssessedBand != null;
 
@@ -61,10 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final profile = await _authService.getUserProfile();
       if (profile != null) {
         if (profile['daily_target'] != null) {
-          _dailyTarget = (profile['daily_target'] as num).toInt();
+          dailyTarget = (profile['daily_target'] as num).toInt();
         }
         if (profile['target_band'] != null) {
-          _targetBand = profile['target_band'] as String;
+          targetBand = profile['target_band'] as String;
         }
         if (profile['current_band'] != null) {
           currentBand = profile['current_band'] as String;
@@ -75,6 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (mounted) {
       setState(() {
+        _dailyTarget = dailyTarget;
+        _targetBand = targetBand;
         _reminderEnabled = reminder['enabled'] as bool;
         _reminderTime = TimeOfDay(hour: reminder['hour'] as int, minute: reminder['minute'] as int);
         _pendingSyncCount = pending;
@@ -180,11 +184,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Cài Đặt & Học Ngoại Tuyến'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             // Account Section
             const Text('Tài khoản & Đồng bộ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary)),
             const SizedBox(height: 10),
@@ -370,6 +377,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onChanged: (val) async {
                               if (val != null) {
                                 setState(() => _targetBand = val);
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setString('target_band', val);
                                 if (_authService.isLoggedIn) {
                                   await _authService.updateProfile(targetBand: val);
                                 }
@@ -396,6 +405,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (val) async {
                             if (val != null) {
                               setState(() => _dailyTarget = val);
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setInt('daily_target', val);
                               if (_authService.isLoggedIn) {
                                 await _authService.updateProfile(dailyTarget: val);
                               }
@@ -585,12 +596,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: const [
                   Text(
-                    'Vocap IELTS v1.0.0 (Oxford 5000 Edition)',
+                    'Vocap IELTS v1.0.0 (Oxford 5000)',
                     style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Thuật toán SM-2 SRS • Cloudflare Audio CDN • Supabase Postgres',
+                    'Vocap IELTS • Tự tin bứt phá từ vựng',
                     style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
                   ),
                 ],
@@ -599,6 +610,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

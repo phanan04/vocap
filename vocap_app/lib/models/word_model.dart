@@ -48,6 +48,7 @@ class WordModel {
 
   /// Audio URL streamed from Supabase CDN
   String get audioUrl => SupabaseConstants.getAudioUrl(us);
+  String get ukAudioUrl => SupabaseConstants.getAudioUrl(uk);
 
   factory WordModel.fromJson(Map<String, dynamic> json) {
     return WordModel(

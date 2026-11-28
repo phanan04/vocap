@@ -3,14 +3,18 @@ import '../services/audio_service.dart';
 
 class AudioPlayButton extends StatefulWidget {
   final String? usAudioFile;
+  final String? audioFile;
   final double size;
   final Color? color;
+  final String? label;
 
   const AudioPlayButton({
     super.key,
-    required this.usAudioFile,
+    this.usAudioFile,
+    this.audioFile,
     this.size = 44,
     this.color,
+    this.label,
   });
 
   @override
@@ -37,13 +41,16 @@ class _AudioPlayButtonState extends State<AudioPlayButton> with SingleTickerProv
     super.dispose();
   }
 
+  String? get _effectiveFile => widget.audioFile ?? widget.usAudioFile;
+
   Future<void> _handlePlay() async {
-    if (widget.usAudioFile == null || widget.usAudioFile!.isEmpty) return;
+    final file = _effectiveFile;
+    if (file == null || file.isEmpty) return;
 
     setState(() => _isPlaying = true);
     _animController.forward(from: 0.0);
 
-    await _audioService.playAudio(widget.usAudioFile);
+    await _audioService.playAudio(file);
 
     if (mounted) {
       setState(() => _isPlaying = false);
@@ -55,18 +62,55 @@ class _AudioPlayButtonState extends State<AudioPlayButton> with SingleTickerProv
     final theme = Theme.of(context);
     final buttonColor = widget.color ?? theme.colorScheme.primary;
 
+    if (widget.label != null && widget.label!.isNotEmpty) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _effectiveFile != null && _effectiveFile!.isNotEmpty ? _handlePlay : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: buttonColor.withValues(alpha: 0.12),
+              border: Border.all(color: buttonColor.withValues(alpha: 0.35), width: 1.2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isPlaying ? Icons.volume_up : Icons.volume_up_outlined,
+                  color: buttonColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  widget.label!,
+                  style: TextStyle(
+                    color: buttonColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: _handlePlay,
+        onTap: _effectiveFile != null && _effectiveFile!.isNotEmpty ? _handlePlay : null,
         borderRadius: BorderRadius.circular(widget.size / 2),
         child: Container(
           width: widget.size,
           height: widget.size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: buttonColor.withOpacity(0.15),
-            border: Border.all(color: buttonColor.withOpacity(0.4), width: 1.5),
+            color: buttonColor.withValues(alpha: 0.15),
+            border: Border.all(color: buttonColor.withValues(alpha: 0.4), width: 1.5),
           ),
           child: Icon(
             _isPlaying ? Icons.volume_up : Icons.volume_up_outlined,

@@ -171,11 +171,14 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // Progress & Level Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -362,8 +365,10 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   /// Initial Onboarding Intro Setup Screen (shown immediately when signing up)
   Widget _buildIntroSetupView() {
@@ -373,7 +378,10 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
         automaticallyImplyLeading: !widget.isInitialOnboarding,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -557,8 +565,10 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildResultsView() {
     final result = PlacementTestService.evaluateScore(_score);
@@ -569,7 +579,10 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
@@ -698,6 +711,8 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

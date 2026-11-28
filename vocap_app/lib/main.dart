@@ -34,7 +34,7 @@ class VocapApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Vocap - IELTS Spaced Repetition Vocabulary',
+      title: 'Vocap - IELTS Vocabulary',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: initialScreen,

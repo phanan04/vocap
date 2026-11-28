@@ -63,7 +63,7 @@ class ProgressService {
     };
   }
 
-  Future<void> recordReview(int wordId, int quality, {bool countTowardsDaily = true}) async {
+  Future<void> recordReview(int wordId, int quality, {bool countTowardsDaily = true, bool canMarkMastered = true}) async {
     final prefs = await SharedPreferences.getInstance();
     final today = _todayString();
     final lastDate = prefs.getString(_keyLastDate) ?? '';
@@ -94,8 +94,8 @@ class ProgressService {
     learnedSet.add(wordId.toString());
     await prefs.setStringList(_keyTotalLearned, learnedSet.toList());
 
-    // Track mastered if quality is 4 (Easy) or marked as known
-    if (quality >= 4) {
+    // Track mastered only if explicitly marked as known or rated Easy (quality >= 4) in deliberate study
+    if (quality >= 4 && canMarkMastered) {
       final masteredSet = (prefs.getStringList(_keyMastered) ?? []).toSet();
       masteredSet.add(wordId.toString());
       await prefs.setStringList(_keyMastered, masteredSet.toList());

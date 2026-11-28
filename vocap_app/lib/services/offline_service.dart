@@ -14,6 +14,34 @@ class OfflineService {
   static const String _keyDailyReminderHour = 'reminder_hour';
   static const String _keyDailyReminderMinute = 'reminder_minute';
   static const String _keyReminderEnabled = 'reminder_enabled';
+  static const String _keyBookmarkedWordIds = 'bookmarked_word_ids';
+
+  /// Toggle local bookmark
+  Future<void> toggleLocalBookmark(int wordId, bool isBookmarked) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_keyBookmarkedWordIds) ?? [];
+    final idStr = wordId.toString();
+    if (isBookmarked && !list.contains(idStr)) {
+      list.add(idStr);
+    } else if (!isBookmarked && list.contains(idStr)) {
+      list.remove(idStr);
+    }
+    await prefs.setStringList(_keyBookmarkedWordIds, list);
+  }
+
+  /// Check if word is bookmarked locally
+  Future<bool> isLocalBookmarked(int wordId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_keyBookmarkedWordIds) ?? [];
+    return list.contains(wordId.toString());
+  }
+
+  /// Get all locally bookmarked word IDs
+  Future<List<int>> getLocalBookmarkedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_keyBookmarkedWordIds) ?? [];
+    return list.map((e) => int.tryParse(e) ?? 0).where((id) => id > 0).toList();
+  }
 
   /// Save words list to local disk cache
   Future<void> cacheWords(List<WordModel> words) async {

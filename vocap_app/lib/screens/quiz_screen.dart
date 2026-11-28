@@ -94,7 +94,9 @@ class _QuizScreenState extends State<QuizScreen> {
     // Auto-play audio if in listening mode
     if (widget.mode == QuizMode.listening && targetWord.us != null) {
       Future.delayed(const Duration(milliseconds: 300), () {
-        _audioService.playAudio(targetWord.us);
+        if (mounted) {
+          _audioService.playAudio(targetWord.us);
+        }
       });
     }
 
@@ -111,12 +113,18 @@ class _QuizScreenState extends State<QuizScreen> {
       if (isCorrect) _score++;
     });
 
-    // Record SRS review (XP and SM-2 update, without inflating daily new-word counter)
+    // Record SRS review (XP and SM-2 update, without inflating daily new-word counter or prematurely marking mastered)
     final currentWord = widget.words[_currentIndex];
-    await _progressService.recordReview(currentWord.id, isCorrect ? 4 : 1, countTowardsDaily: false);
+    final rating = isCorrect ? 3 : 1;
+    await _progressService.recordReview(
+      currentWord.id,
+      rating,
+      countTowardsDaily: false,
+      canMarkMastered: false,
+    );
     _supabaseService.submitSrsReview(
       wordId: currentWord.id,
-      quality: isCorrect ? 4 : 1,
+      quality: rating,
       reviewType: 'quiz',
     );
   }
@@ -194,11 +202,14 @@ class _QuizScreenState extends State<QuizScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Prompt Card
               Expanded(
                 flex: 4,
@@ -239,8 +250,10 @@ class _QuizScreenState extends State<QuizScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildPromptContent(WordModel word) {
     switch (widget.mode) {

@@ -282,7 +282,6 @@ class SupabaseService {
             .toList();
       } else {
         final response = await _client.rpc('get_due_words', params: {
-          'p_user_id': user.id,
           'p_limit': limit,
         });
 
@@ -362,7 +361,7 @@ class SupabaseService {
     if (user == null) return null;
 
     try {
-      final now = DateTime.now().toUtc();
+      final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
       // 1. Check study_logs for today
@@ -380,17 +379,18 @@ class SupabaseService {
       // 2. Fallback: check count of user_words reviewed today
       final countRes = await _client
           .from('user_words')
-          .select('id')
+          .select()
           .eq('user_id', user.id)
-          .gte('last_reviewed_at', '${todayStr}T00:00:00Z');
+          .gte('last_reviewed_at', '${todayStr}T00:00:00')
+          .count(CountOption.exact);
 
-      return (countRes as List).length;
+      return countRes.count;
     } catch (_) {
       return null;
     }
   }
 
-  /// Get real user stats from Supabase (actual words learned & mastered)
+  /// Get real user stats from Supabase (actual words learned & mastered) with exact count
   Future<Map<String, int>?> getUserCloudStats() async {
     final user = _client.auth.currentUser;
     if (user == null) return null;
@@ -398,22 +398,64 @@ class SupabaseService {
     try {
       final learnedRes = await _client
           .from('user_words')
-          .select('id')
+          .select()
           .eq('user_id', user.id)
-          .neq('status', 'mastered');
+          .neq('status', 'mastered')
+          .count(CountOption.exact);
 
       final masteredRes = await _client
           .from('user_words')
-          .select('id')
+          .select()
           .eq('user_id', user.id)
-          .eq('status', 'mastered');
+          .eq('status', 'mastered')
+          .count(CountOption.exact);
 
       return {
-        'totalLearned': (learnedRes as List).length,
-        'totalMastered': (masteredRes as List).length,
+        'totalLearned': learnedRes.count,
+        'totalMastered': masteredRes.count,
       };
     } catch (_) {
       return null;
     }
+  }
+
+  /// Toggle word bookmark
+  Future<bool> toggleBookmark(int wordId, bool isBookmarked) async {
+    final user = _client.auth.currentUser;
+    final newBookmarkState = !isBookmarked;
+
+    if (user != null) {
+      try {
+        await _client.from('user_words').upsert({
+          'user_id': user.id,
+          'word_id': wordId,
+          'is_bookmarked': newBookmarkState,
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'user_id,word_id');
+      } catch (_) {}
+    }
+
+    // Also persist in local SharedPreferences for offline & Guest
+    await _offlineService.toggleLocalBookmark(wordId, newBookmarkState);
+    return newBookmarkState;
+  }
+
+  /// Check if a word is bookmarked
+  Future<bool> isWordBookmarked(int wordId) async {
+    final user = _client.auth.currentUser;
+    if (user != null) {
+      try {
+        final res = await _client
+            .from('user_words')
+            .select('is_bookmarked')
+            .eq('user_id', user.id)
+            .eq('word_id', wordId)
+            .maybeSingle();
+        if (res != null && res['is_bookmarked'] != null) {
+          return res['is_bookmarked'] as bool;
+        }
+      } catch (_) {}
+    }
+    return _offlineService.isLocalBookmarked(wordId);
   }
 }

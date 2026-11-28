@@ -34,6 +34,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
   final List<String> _targetBands = ['5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -117,7 +125,10 @@ class _AuthScreenState extends State<AuthScreen> {
         title: Text(_isSignUp ? 'Tạo Tài Khoản' : 'Đăng Nhập'),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
@@ -223,7 +234,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                   // Target Band Selector
                   DropdownButtonFormField<String>(
-                    value: _selectedTargetBand,
+                    initialValue: _selectedTargetBand,
                     decoration: const InputDecoration(
                       labelText: 'Mục tiêu điểm IELTS (Target Band)',
                       prefixIcon: Icon(Icons.flag_outlined),
@@ -317,6 +328,8 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

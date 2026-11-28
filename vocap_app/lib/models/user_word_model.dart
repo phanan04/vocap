@@ -37,9 +37,9 @@ class UserWordModel {
       easeFactor: (json['ease_factor'] as num?)?.toDouble() ?? 2.5,
       intervalDays: json['interval_days'] as int? ?? 1,
       repetitions: json['repetitions'] as int? ?? 0,
-      nextReview: DateTime.parse(json['next_review'] as String),
-      lastReviewed: json['last_reviewed'] != null
-          ? DateTime.parse(json['last_reviewed'] as String)
+      nextReview: DateTime.parse((json['next_review_at'] ?? json['next_review']) as String),
+      lastReviewed: (json['last_reviewed_at'] ?? json['last_reviewed']) != null
+          ? DateTime.parse((json['last_reviewed_at'] ?? json['last_reviewed']) as String)
           : null,
       word: json['words'] != null
           ? WordModel.fromJson(json['words'] as Map<String, dynamic>)

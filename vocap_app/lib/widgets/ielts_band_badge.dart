@@ -18,25 +18,26 @@ class IeltsBandBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5), width: 1),
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
               cefr.toUpperCase(),
               style: const TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Colors.white,
+                letterSpacing: 0.2,
               ),
             ),
           ),
@@ -45,8 +46,9 @@ class IeltsBandBadge extends StatelessWidget {
             'Band $band',
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: color,
+              letterSpacing: -0.2,
             ),
           ),
         ],

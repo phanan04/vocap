@@ -48,9 +48,12 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
             children: [
               const Spacer(),
 
@@ -61,13 +64,13 @@ class WelcomeScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.4)],
+                    colors: [AppTheme.primary, AppTheme.primary.withValues(alpha: 0.4)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primary.withOpacity(0.35),
+                      color: AppTheme.primary.withValues(alpha: 0.35),
                       blurRadius: 30,
                       spreadRadius: 5,
                     ),
@@ -86,7 +89,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Chinh phục 6.000 từ vựng học thuật với thuật toán ghi nhớ SuperMemo-2',
+                'Chinh phục 6.000 từ vựng IELTS cốt lõi một cách dễ dàng và hiệu quả',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, color: AppTheme.textMuted, height: 1.4),
               ),
@@ -95,8 +98,8 @@ class WelcomeScreen extends StatelessWidget {
               // Value Props Cards
               _buildFeatureRow(
                 icon: Icons.psychology,
-                title: 'Lặp lại ngắt quãng (SM-2)',
-                subtitle: 'Ghi nhớ vĩnh viễn, tối ưu thời gian ôn tập',
+                title: 'Nhắc lại thông minh',
+                subtitle: 'Tự động nhắc lại từ đúng lúc giúp bạn nhớ lâu không quên',
               ),
               const SizedBox(height: 14),
               _buildFeatureRow(
@@ -153,8 +156,10 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildFeatureRow({required IconData icon, required String title, required String subtitle}) {
     return Container(
@@ -169,7 +174,7 @@ class WelcomeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.15),
+              color: AppTheme.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppTheme.primary, size: 22),

@@ -15,7 +15,7 @@ class FlashcardScreen extends StatefulWidget {
   const FlashcardScreen({
     super.key,
     required this.words,
-    this.title = 'SRS Flashcard Review',
+    this.title = 'Thẻ ghi nhớ Flashcards',
   });
 
   @override
@@ -25,14 +25,18 @@ class FlashcardScreen extends StatefulWidget {
 class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProviderStateMixin {
   final SupabaseService _supabaseService = SupabaseService();
   final ProgressService _progressService = ProgressService();
+
+  late List<WordModel> _words;
   int _currentIndex = 0;
   bool _isFlipped = false;
+  bool _isBookmarked = false;
   late AnimationController _flipController;
   late Animation<double> _flipAnimation;
 
   @override
   void initState() {
     super.initState();
+    _words = List<WordModel>.from(widget.words);
     _flipController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -40,12 +44,38 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
     _flipAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
     );
+    _checkBookmark();
   }
 
   @override
   void dispose() {
     _flipController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBookmark() async {
+    if (_words.isEmpty || _currentIndex >= _words.length) return;
+    final currentWord = _words[_currentIndex];
+    final bookmarked = await _supabaseService.isWordBookmarked(currentWord.id);
+    if (mounted) {
+      setState(() => _isBookmarked = bookmarked);
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    if (_words.isEmpty || _currentIndex >= _words.length) return;
+    final currentWord = _words[_currentIndex];
+    final newState = await _supabaseService.toggleBookmark(currentWord.id, _isBookmarked);
+    if (mounted) {
+      setState(() => _isBookmarked = newState);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newState ? '⭐ Đã lưu vào sổ tay yêu thích!' : 'Đã bỏ lưu từ.'),
+          duration: const Duration(seconds: 1),
+          backgroundColor: newState ? AppTheme.primary : Colors.grey.shade800,
+        ),
+      );
+    }
   }
 
   void _flipCard() {
@@ -58,7 +88,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
   }
 
   Future<void> _handleSrsQuality(int quality) async {
-    final currentWord = widget.words[_currentIndex];
+    final currentWord = _words[_currentIndex];
 
     // Record progress locally
     await _progressService.recordReview(currentWord.id, quality);
@@ -70,19 +100,36 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
       reviewType: 'flashcard',
     );
 
-    if (_currentIndex < widget.words.length - 1) {
+    // If rated Again (1: Quên), re-queue word at the end of the session to reinforce recall
+    if (quality == 1) {
+      setState(() {
+        _words.add(currentWord);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔁 Đã thêm "${currentWord.word}" vào cuối phiên để ôn lại!'),
+            duration: const Duration(milliseconds: 1400),
+            backgroundColor: AppTheme.qualityAgain,
+          ),
+        );
+      }
+    }
+
+    if (_currentIndex < _words.length - 1) {
       if (_isFlipped) {
         await _flipController.reverse();
         _isFlipped = false;
       }
       setState(() => _currentIndex++);
+      _checkBookmark();
     } else {
       _showCompletionDialog();
     }
   }
 
   Future<void> _handleMarkAsKnown() async {
-    final currentWord = widget.words[_currentIndex];
+    final currentWord = _words[_currentIndex];
 
     // Record progress locally
     await _progressService.recordReview(currentWord.id, 4);
@@ -90,20 +137,23 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
     // Call Supabase RPC
     _supabaseService.markWordAsKnown(currentWord.id);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ Đã đánh dấu "${currentWord.word}" là đã thuộc (sẽ không xuất hiện lại).'),
-        duration: const Duration(milliseconds: 1500),
-        backgroundColor: Colors.green.shade800,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Đã đánh dấu "${currentWord.word}" là đã thuộc (sẽ không xuất hiện lại).'),
+          duration: const Duration(milliseconds: 1500),
+          backgroundColor: Colors.green.shade800,
+        ),
+      );
+    }
 
-    if (_currentIndex < widget.words.length - 1) {
+    if (_currentIndex < _words.length - 1) {
       if (_isFlipped) {
         await _flipController.reverse();
         _isFlipped = false;
       }
       setState(() => _currentIndex++);
+      _checkBookmark();
     } else {
       _showCompletionDialog();
     }
@@ -172,20 +222,28 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    if (widget.words.isEmpty) {
+    if (_words.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.title)),
         body: const Center(child: Text('Không có từ vựng nào cần ôn tập hôm nay!')),
       );
     }
 
-    final word = widget.words[_currentIndex];
-    final progress = (_currentIndex + 1) / widget.words.length;
+    final word = _words[_currentIndex];
+    final progress = (_currentIndex + 1) / _words.length;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${_currentIndex + 1} / ${widget.words.length}'),
+        title: Text('${_currentIndex + 1} / ${_words.length}'),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? Colors.amber : AppTheme.textMuted,
+            ),
+            tooltip: _isBookmarked ? 'Bỏ lưu từ' : 'Lưu từ vào sổ tay',
+            onPressed: _toggleBookmark,
+          ),
           Tooltip(
             message: 'Đánh dấu từ này là đã thuộc (không học lại nữa)',
             child: TextButton.icon(
@@ -208,140 +266,145 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
         ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            // Topic Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                // Topic Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (word.sessionType != null) ...[
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: word.sessionType == 'review'
+                                      ? const Color(0xFFF97316).withValues(alpha: 0.2)
+                                      : const Color(0xFF10B981).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: word.sessionType == 'review'
+                                        ? const Color(0xFFF97316)
+                                        : const Color(0xFF10B981),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  word.sessionType == 'review' ? '🔥 ÔN LẠI' : '✨ TỪ MỚI',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: word.sessionType == 'review'
+                                        ? const Color(0xFFF97316)
+                                        : const Color(0xFF10B981),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            Expanded(
+                              child: Text(
+                                word.topic,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IeltsBandBadge(band: word.ieltsBand, cefr: word.cefr),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Flip Flashcard
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GestureDetector(
+                      onTap: _flipCard,
+                      child: AnimatedBuilder(
+                        animation: _flipAnimation,
+                        builder: (context, child) {
+                          final angle = _flipAnimation.value * pi;
+                          final isFront = angle < (pi / 2);
+                          return Transform(
+                            transform: Matrix4.identity()
+                              ..setEntry(3, 2, 0.001)
+                              ..rotateY(angle),
+                            alignment: Alignment.center,
+                            child: isFront
+                                ? _buildFrontCard(word)
+                                : Transform(
+                                    transform: Matrix4.identity()..rotateY(pi),
+                                    alignment: Alignment.center,
+                                    child: _buildBackCard(word),
+                                  ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // SM-2 Review Buttons (Visible after card is flipped)
+                if (_isFlipped) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: Row(
                       children: [
-                        if (word.sessionType != null) ...[
-                          Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: word.sessionType == 'review'
-                                  ? const Color(0xFFF97316).withOpacity(0.2)
-                                  : const Color(0xFF10B981).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: word.sessionType == 'review'
-                                    ? const Color(0xFFF97316)
-                                    : const Color(0xFF10B981),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              word.sessionType == 'review' ? '🔥 ÔN TẬP SM-2' : '✨ TỪ MỚI',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: word.sessionType == 'review'
-                                    ? const Color(0xFFF97316)
-                                    : const Color(0xFF10B981),
-                              ),
-                            ),
-                          ),
-                        ],
-                        Expanded(
-                          child: Text(
-                            word.topic,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.textMuted,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        _buildSrsButton('Quên', 'Again', AppTheme.qualityAgain, () => _handleSrsQuality(1)),
+                        const SizedBox(width: 8),
+                        _buildSrsButton('Khó', 'Hard', AppTheme.qualityHard, () => _handleSrsQuality(2)),
+                        const SizedBox(width: 8),
+                        _buildSrsButton('Nhớ', 'Good', AppTheme.qualityGood, () => _handleSrsQuality(3)),
+                        const SizedBox(width: 8),
+                        _buildSrsButton('Dễ', 'Easy', AppTheme.qualityEasy, () => _handleSrsQuality(4)),
                       ],
                     ),
                   ),
-                  IeltsBandBadge(band: word.ieltsBand, cefr: word.cefr),
-                ],
-              ),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _handleMarkAsKnown,
+                      icon: const Icon(Icons.done_all, size: 16, color: Colors.greenAccent),
+                      label: const Text(
+                        'Từ này tôi đã thuộc hoàn toàn (Bỏ qua, không học lại)',
+                        style: TextStyle(fontSize: 12, color: Colors.greenAccent, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: OutlinedButton.icon(
+                      onPressed: _flipCard,
+                      icon: const Icon(Icons.touch_app, size: 20),
+                      label: const Text('Chạm thẻ để xem nghĩa & chi tiết IELTS'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        foregroundColor: AppTheme.textMuted,
+                        side: const BorderSide(color: Color(0xFF334155)),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 12),
-
-            // Flip Flashcard
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GestureDetector(
-                  onTap: _flipCard,
-                  child: AnimatedBuilder(
-                    animation: _flipAnimation,
-                    builder: (context, child) {
-                      final angle = _flipAnimation.value * pi;
-                      final isFront = angle < (pi / 2);
-                      return Transform(
-                        transform: Matrix4.identity()
-                          ..setEntry(3, 2, 0.001)
-                          ..rotateY(angle),
-                        alignment: Alignment.center,
-                        child: isFront
-                            ? _buildFrontCard(word)
-                            : Transform(
-                                transform: Matrix4.identity()..rotateY(pi),
-                                alignment: Alignment.center,
-                                child: _buildBackCard(word),
-                              ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // SM-2 Review Buttons (Visible after card is flipped)
-            if (_isFlipped) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    _buildSrsButton('Quên', 'Again', AppTheme.qualityAgain, () => _handleSrsQuality(1)),
-                    const SizedBox(width: 8),
-                    _buildSrsButton('Khó', 'Hard', AppTheme.qualityHard, () => _handleSrsQuality(2)),
-                    const SizedBox(width: 8),
-                    _buildSrsButton('Nhớ', 'Good', AppTheme.qualityGood, () => _handleSrsQuality(3)),
-                    const SizedBox(width: 8),
-                    _buildSrsButton('Dễ', 'Easy', AppTheme.qualityEasy, () => _handleSrsQuality(4)),
-                  ],
-                ),
-              ),
-              Center(
-                child: TextButton.icon(
-                  onPressed: _handleMarkAsKnown,
-                  icon: const Icon(Icons.done_all, size: 16, color: Colors.greenAccent),
-                  label: const Text(
-                    'Từ này tôi đã thuộc hoàn toàn (Bỏ qua, không học lại)',
-                    style: TextStyle(fontSize: 12, color: Colors.greenAccent, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ] else
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: OutlinedButton.icon(
-                  onPressed: _flipCard,
-                  icon: const Icon(Icons.touch_app, size: 20),
-                  label: const Text('Chạm thẻ để xem nghĩa & chi tiết IELTS'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    foregroundColor: AppTheme.textMuted,
-                    side: const BorderSide(color: Color(0xFF334155)),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
@@ -349,7 +412,11 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
 
   Widget _buildFrontCard(WordModel word) {
     return Card(
-      elevation: 6,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: AppTheme.borderSubtle, width: 0.8),
+      ),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -359,24 +426,24 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
               Text(
                 word.word,
                 style: const TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 42,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
-                  letterSpacing: -0.5,
+                  letterSpacing: -1.0,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
                   word.type,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppTheme.textMuted,
                     fontStyle: FontStyle.italic,
                   ),
@@ -387,13 +454,33 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
                 Text(
                   word.phonNAm!,
                   style: const TextStyle(
-                    fontSize: 18,
-                    color: Color(0xFF38BDF8), // Cyan IPA
-                    fontFamily: 'monospace',
+                    fontSize: 17,
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              const SizedBox(height: 24),
-              AudioPlayButton(usAudioFile: word.us, size: 60),
+              const SizedBox(height: 28),
+              Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (word.us != null && word.us!.isNotEmpty)
+                    AudioPlayButton(
+                      usAudioFile: word.us,
+                      label: 'Phát âm US',
+                      size: 46,
+                      color: AppTheme.primary,
+                    ),
+                  if (word.uk != null && word.uk!.isNotEmpty)
+                    AudioPlayButton(
+                      audioFile: word.uk,
+                      label: 'Phát âm UK',
+                      size: 46,
+                      color: AppTheme.accent,
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -403,7 +490,11 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
 
   Widget _buildBackCard(WordModel word) {
     return Card(
-      elevation: 6,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: AppTheme.borderSubtle, width: 0.8),
+      ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(22),
         child: Column(
@@ -428,7 +519,17 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
                     ],
                   ),
                 ),
-                AudioPlayButton(usAudioFile: word.us, size: 40),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (word.us != null && word.us!.isNotEmpty)
+                      AudioPlayButton(usAudioFile: word.us, size: 38, color: const Color(0xFF38BDF8)),
+                    if (word.uk != null && word.uk!.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      AudioPlayButton(audioFile: word.uk, size: 38, color: const Color(0xFFA78BFA)),
+                    ],
+                  ],
+                ),
               ],
             ),
             const Divider(height: 24, color: Color(0xFF334155)),
@@ -461,7 +562,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(10),
                 border: const Border(left: BorderSide(color: AppTheme.primary, width: 3)),
               ),
@@ -481,6 +582,31 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
               ),
             ),
             const SizedBox(height: 16),
+
+            // Word Family (if available)
+            if (word.wordFamily.isNotEmpty) ...[
+              const Text('Gia đình từ (Word Family):', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: word.wordFamily.entries.map((entry) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Text(
+                      '${entry.key}: ${entry.value}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFFFBBF24)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Collocations
             if (word.collocations.isNotEmpty) ...[
@@ -507,7 +633,7 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
                 spacing: 6,
                 children: word.synonyms.take(4).map((syn) => Chip(
                   label: Text(syn, style: const TextStyle(fontSize: 12, color: Color(0xFF93C5FD))),
-                  backgroundColor: const Color(0xFF1E3A8A).withOpacity(0.3),
+                  backgroundColor: const Color(0xFF1E3A8A).withValues(alpha: 0.3),
                   side: const BorderSide(color: Color(0xFF3B82F6)),
                 )).toList(),
               ),
@@ -523,18 +649,19 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: color.withOpacity(0.18),
+          backgroundColor: color.withValues(alpha: 0.14),
           foregroundColor: color,
-          side: BorderSide(color: color, width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(color: color.withValues(alpha: 0.35), width: 0.8),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 0,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(viLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            Text(enLabel, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w400)),
+            Text(viLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+            const SizedBox(height: 1),
+            Text(enLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400)),
           ],
         ),
       ),

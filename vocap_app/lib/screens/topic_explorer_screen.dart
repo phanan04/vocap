@@ -38,6 +38,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
   String _selectedPos = 'All'; // Part of speech: noun, verb, adjective, adverb
   String _selectedSort = 'id_asc';
   bool _onlyCollocations = false;
+  bool _onlyBookmarked = false;
 
   final List<String> _bands = [
     'All',
@@ -91,6 +92,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
       _selectedCefr != 'All' ||
       _selectedPos != 'All' ||
       _onlyCollocations ||
+      _onlyBookmarked ||
       _selectedSort != 'id_asc';
 
   int get _activeFilterCount {
@@ -99,6 +101,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
     if (_selectedCefr != 'All') count++;
     if (_selectedPos != 'All') count++;
     if (_onlyCollocations) count++;
+    if (_onlyBookmarked) count++;
     if (_selectedSort != 'id_asc') count++;
     return count;
   }
@@ -142,10 +145,19 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
       offset: 0,
     );
 
+    List<WordModel> words = (res['words'] as List<WordModel>?) ?? [];
+    int total = (res['total'] as int?) ?? 0;
+
+    if (_onlyBookmarked) {
+      final bookmarkedIds = await _supabaseService.offlineService.getLocalBookmarkedIds();
+      words = words.where((w) => bookmarkedIds.contains(w.id)).toList();
+      total = words.length;
+    }
+
     if (mounted) {
       setState(() {
-        _results = (res['words'] as List<WordModel>?) ?? [];
-        _totalCount = (res['total'] as int?) ?? 0;
+        _results = words;
+        _totalCount = total;
         _isLoadingWords = false;
       });
     }
@@ -186,6 +198,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
       _selectedPos = 'All';
       _selectedSort = 'id_asc';
       _onlyCollocations = false;
+      _onlyBookmarked = false;
       _searchController.clear();
       _results = [];
       _totalCount = 0;
@@ -292,9 +305,22 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                 title: const Text('Chỉ từ có Collocations điểm cao', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 subtitle: const Text('Ưu tiên từ vựng có cụm từ ăn điểm Writing & Speaking', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                 value: _onlyCollocations,
-                activeColor: AppTheme.primary,
+                activeThumbColor: AppTheme.primary,
                 onChanged: (val) {
                   setModalState(() => _onlyCollocations = val);
+                },
+              ),
+              const SizedBox(height: 8),
+
+              // 4. Bookmarked Only Switch
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Chỉ từ trong Sổ tay yêu thích ⭐', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Xem các từ vựng bạn đã đánh dấu bookmark', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                value: _onlyBookmarked,
+                activeThumbColor: Colors.amber,
+                onChanged: (val) {
+                  setModalState(() => _onlyBookmarked = val);
                 },
               ),
               const SizedBox(height: 8),
@@ -782,7 +808,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
         Expanded(
           child: ListView.separated(
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
             itemCount: _results.length + (_isLoadingMore ? 1 : (_results.length < _totalCount ? 1 : 0)),
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (_, idx) {
@@ -871,7 +897,7 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         childAspectRatio: 1.7,

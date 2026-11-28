@@ -109,11 +109,8 @@ class AuthService {
         final wordId = int.tryParse(idStr);
         if (wordId != null) {
           await _client.rpc('submit_srs_review', params: {
-            'p_user_id': user.id,
             'p_word_id': wordId,
-            'p_quality': 4,
-            'p_response_time_ms': 1000,
-            'p_review_type': 'sync',
+            'p_rating': 4,
           });
         }
       }

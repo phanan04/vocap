@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     display_name TEXT,
     avatar_url TEXT,
     target_band TEXT DEFAULT '6.5',
+    current_band TEXT DEFAULT '5.5',
     daily_target INT DEFAULT 10 CHECK (daily_target > 0),
     preferred_topics TEXT[] DEFAULT '{}',
     streak_count INT DEFAULT 0 CHECK (streak_count >= 0),
@@ -368,5 +369,191 @@ BEGIN
       AND uw.next_review_at <= NOW()
     ORDER BY uw.next_review_at ASC
     LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ------------------------------------------------------------------------------
+-- 8. RPC FUNCTION: MARK WORD AS KNOWN / MASTERED
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.mark_word_as_known(p_word_id INT)
+RETURNS JSONB AS $$
+DECLARE
+    v_user_id UUID;
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    INSERT INTO public.user_words (
+        user_id, word_id, status, ease_factor, interval_days, repetitions,
+        next_review_at, last_reviewed_at, updated_at
+    )
+    VALUES (
+        v_user_id, p_word_id, 'mastered', 2.50, 365, 5,
+        NOW() + INTERVAL '365 days', NOW(), NOW()
+    )
+    ON CONFLICT (user_id, word_id) DO UPDATE SET
+        status = 'mastered',
+        interval_days = 365,
+        repetitions = 5,
+        next_review_at = NOW() + INTERVAL '365 days',
+        last_reviewed_at = NOW(),
+        updated_at = NOW();
+
+    RETURN jsonb_build_object('success', true, 'status', 'mastered', 'word_id', p_word_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ------------------------------------------------------------------------------
+-- 9. RPC FUNCTION: GET TOPIC STATS
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.get_topic_stats(p_band TEXT DEFAULT 'All')
+RETURNS TABLE (
+    topic TEXT,
+    word_count BIGINT
+) AS $$
+BEGIN
+    IF p_band IS NULL OR p_band = '' OR p_band = 'All' THEN
+        RETURN QUERY
+        SELECT w.topic, COUNT(*)::BIGINT AS word_count
+        FROM public.words w
+        GROUP BY w.topic
+        ORDER BY w.topic ASC;
+    ELSE
+        RETURN QUERY
+        SELECT w.topic, COUNT(*)::BIGINT AS word_count
+        FROM public.words w
+        WHERE w.ielts_band = p_band
+        GROUP BY w.topic
+        ORDER BY w.topic ASC;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ------------------------------------------------------------------------------
+-- 10. RPC FUNCTION: SKIP WORDS BELOW BAND
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.skip_words_below_band(p_current_band TEXT)
+RETURNS JSONB AS $$
+DECLARE
+    v_user_id UUID;
+    v_skipped INT := 0;
+    v_bands TEXT[];
+BEGIN
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- Determine which lower bands to skip
+    IF p_current_band IN ('8.0', '8.5') THEN
+        v_bands := ARRAY['1.0 - 2.5', '3.0 - 3.5', '4.0 - 5.0', '5.5 - 6.5', '7.0 - 8.0'];
+    ELSIF p_current_band IN ('7.0', '7.5') THEN
+        v_bands := ARRAY['1.0 - 2.5', '3.0 - 3.5', '4.0 - 5.0', '5.5 - 6.5'];
+    ELSIF p_current_band IN ('6.0', '6.5') THEN
+        v_bands := ARRAY['1.0 - 2.5', '3.0 - 3.5', '4.0 - 5.0'];
+    ELSIF p_current_band IN ('5.0', '5.5') THEN
+        v_bands := ARRAY['1.0 - 2.5', '3.0 - 3.5'];
+    ELSIF p_current_band IN ('4.5') THEN
+        v_bands := ARRAY['1.0 - 2.5'];
+    ELSE
+        RETURN jsonb_build_object('success', true, 'skipped_count', 0);
+    END IF;
+
+    INSERT INTO public.user_words (
+        user_id, word_id, status, ease_factor, interval_days, repetitions,
+        next_review_at, last_reviewed_at, updated_at
+    )
+    SELECT
+        v_user_id, w.id, 'mastered', 2.50, 365, 5,
+        NOW() + INTERVAL '365 days', NOW(), NOW()
+    FROM public.words w
+    WHERE w.ielts_band = ANY(v_bands)
+    ON CONFLICT (user_id, word_id) DO NOTHING;
+
+    GET DIAGNOSTICS v_skipped = ROW_COUNT;
+
+    RETURN jsonb_build_object('success', true, 'skipped_count', v_skipped);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ------------------------------------------------------------------------------
+-- 11. RPC FUNCTION: GET SMART STUDY SESSION
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.get_smart_study_session(
+    p_user_id UUID,
+    p_target_band TEXT DEFAULT '6.5',
+    p_limit INT DEFAULT 20,
+    p_current_band TEXT DEFAULT '5.5'
+)
+RETURNS TABLE (
+    id INT,
+    word TEXT,
+    type TEXT,
+    cefr TEXT,
+    ielts_band TEXT,
+    phon_br TEXT,
+    phon_n_am TEXT,
+    meaning_vi TEXT,
+    definition TEXT,
+    example TEXT,
+    example_vi TEXT,
+    collocations TEXT[],
+    synonyms TEXT[],
+    antonyms TEXT[],
+    word_family JSONB,
+    uk TEXT,
+    us TEXT,
+    topic TEXT,
+    subtopic TEXT,
+    session_type TEXT
+) AS $$
+DECLARE
+    v_actual_user_id UUID;
+    v_due_count INT := 0;
+BEGIN
+    v_actual_user_id := COALESCE(p_user_id, auth.uid());
+
+    -- Part 1: Due SM-2 review words
+    IF v_actual_user_id IS NOT NULL THEN
+        RETURN QUERY
+        SELECT 
+            w.id, w.word, w.type, w.cefr, w.ielts_band,
+            w.phon_br, w.phon_n_am, w.meaning_vi, w.definition,
+            w.example, w.example_vi, w.collocations, w.synonyms, w.antonyms,
+            w.word_family, w.uk, w.us, w.topic, w.subtopic,
+            'review'::TEXT AS session_type
+        FROM public.user_words uw
+        JOIN public.words w ON w.id = uw.word_id
+        WHERE uw.user_id = v_actual_user_id
+          AND uw.status IN ('learning', 'reviewing')
+          AND uw.next_review_at <= NOW()
+        ORDER BY uw.next_review_at ASC
+        LIMIT p_limit;
+
+        GET DIAGNOSTICS v_due_count = ROW_COUNT;
+    END IF;
+
+    -- Part 2: If we still need more words to meet p_limit, select adaptive new words
+    IF v_due_count < p_limit THEN
+        RETURN QUERY
+        SELECT 
+            w.id, w.word, w.type, w.cefr, w.ielts_band,
+            w.phon_br, w.phon_n_am, w.meaning_vi, w.definition,
+            w.example, w.example_vi, w.collocations, w.synonyms, w.antonyms,
+            w.word_family, w.uk, w.us, w.topic, w.subtopic,
+            'new'::TEXT AS session_type
+        FROM public.words w
+        WHERE (
+            v_actual_user_id IS NULL OR 
+            NOT EXISTS (
+                SELECT 1 FROM public.user_words uw 
+                WHERE uw.user_id = v_actual_user_id AND uw.word_id = w.id
+            )
+        )
+        ORDER BY w.id ASC
+        LIMIT (p_limit - v_due_count);
+    END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
