@@ -143,15 +143,6 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 child: const Text('Tôi Đã Có Tài Khoản', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               ),
-              const SizedBox(height: 12),
-
-              TextButton(
-                onPressed: () => _skipToGuest(context),
-                child: const Text(
-                  'Dùng thử ở chế độ Khách ➔',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                ),
-              ),
             ],
           ),
         ),

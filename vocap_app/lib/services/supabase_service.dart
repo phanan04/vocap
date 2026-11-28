@@ -234,9 +234,6 @@ class SupabaseService {
           .map((e) => WordModel.fromJson(e as Map<String, dynamic>))
           .toList();
 
-      if (words.isNotEmpty) {
-        await _offlineService.cacheWords(words);
-      }
       return words;
     } catch (_) {
       // Offline fallback
@@ -246,6 +243,60 @@ class SupabaseService {
       }
       return [];
     }
+  }
+
+  /// Fetch words at or above a minimum IELTS band
+  Future<List<WordModel>> getWordsAtOrAboveBand(double minBand, {int limit = 20}) async {
+    final List<String> allowedBands = [];
+    if (minBand <= 2.5) allowedBands.add('1.0 - 2.5');
+    if (minBand <= 3.5) allowedBands.add('3.0 - 3.5');
+    if (minBand <= 5.0) allowedBands.add('4.0 - 5.0');
+    if (minBand <= 6.5) allowedBands.add('5.5 - 6.5');
+    if (minBand <= 8.0) allowedBands.add('7.0 - 8.0');
+    allowedBands.add('8.5 - 9.0');
+
+    try {
+      final response = await _client
+          .from('words')
+          .select()
+          .inFilter('ielts_band', allowedBands)
+          .order('id', ascending: true)
+          .limit(limit);
+
+      return (response as List<dynamic>)
+          .map((e) => WordModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Fetch ALL words in batches for full offline mode
+  Future<List<WordModel>> fetchAllWordsForOffline({void Function(int loaded)? onProgress}) async {
+    final List<WordModel> allWords = [];
+    int offset = 0;
+    const int pageSize = 1000;
+
+    while (true) {
+      final response = await _client
+          .from('words')
+          .select()
+          .order('id', ascending: true)
+          .range(offset, offset + pageSize - 1);
+
+      final batch = (response as List<dynamic>)
+          .map((e) => WordModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      if (batch.isEmpty) break;
+      allWords.addAll(batch);
+      onProgress?.call(allWords.length);
+
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    return allWords;
   }
 
   /// Bulk skip all words below current assessed band

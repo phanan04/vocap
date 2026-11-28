@@ -4,6 +4,7 @@ import '../services/offline_service.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
 import '../services/placement_test_service.dart';
+import '../services/app_update_service.dart';
 import '../core/theme/app_theme.dart';
 import 'auth_screen.dart';
 import 'placement_test_screen.dart';
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _authService = AuthService();
   final SupabaseService _supabaseService = SupabaseService();
   final PlacementTestService _testService = PlacementTestService();
+  final AppUpdateService _updateService = AppUpdateService();
 
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 20, minute: 0);
@@ -33,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSyncing = false;
   bool _isSkipping = false;
   bool _hasCompletedTest = false;
+  bool _isCheckingUpdate = false;
   bool _autoSkipBelowBand = true;
 
   final List<String> _targetBands = ['5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
@@ -158,7 +161,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handlePreloadWords() async {
     setState(() => _isSyncing = true);
     try {
-      final words = await _supabaseService.getWordsByTopic('Education & Learning', limit: 100);
+      final words = await _supabaseService.fetchAllWordsForOffline(
+        onProgress: (loaded) {
+          if (mounted) {
+            setState(() => _cachedWordsCount = loaded);
+          }
+        },
+      );
       await _offlineService.cacheWords(words);
       final cached = await _offlineService.getCachedWords();
       if (mounted) {
@@ -168,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('📥 Đã tải sẵn ${cached.length} từ vựng vào bộ nhớ máy để học ngoại tuyến!'),
+            content: Text('📥 Đã tải toàn bộ ${cached.length} từ vựng vào máy để học Offline!'),
             backgroundColor: AppTheme.primary,
           ),
         );
@@ -176,6 +185,107 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (mounted) setState(() => _isSyncing = false);
     }
+  }
+
+  Future<void> _handleClearOfflineCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_words_v1');
+    if (mounted) {
+      setState(() => _cachedWordsCount = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🗑️ Đã xóa dữ liệu Offline. App sẽ sử dụng chế độ Online.'),
+          backgroundColor: AppTheme.surfaceElevated,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleCheckForUpdate() async {
+    setState(() => _isCheckingUpdate = true);
+    final result = await _updateService.checkForUpdate();
+    if (!mounted) return;
+    setState(() => _isCheckingUpdate = false);
+
+    if (result.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error!), backgroundColor: AppTheme.red),
+      );
+      return;
+    }
+
+    if (!result.hasUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Bạn đang dùng phiên bản mới nhất (v${result.currentVersion})'),
+          backgroundColor: AppTheme.surfaceElevated,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.system_update_rounded, color: AppTheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Có bản cập nhật v${result.latestVersion}',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Phiên bản hiện tại: v${result.currentVersion}',
+              style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+            ),
+            if (result.releaseNotes.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('Nội dung cập nhật:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 160),
+                child: SingleChildScrollView(
+                  child: Text(
+                    result.releaseNotes,
+                    style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Để sau', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final url = result.apkDownloadUrl ?? result.htmlUrl;
+              await _updateService.launchUpdateDownload(url);
+            },
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: Text(result.apkDownloadUrl != null ? 'Tải & Cài đặt APK' : 'Xem bản phát hành'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -563,23 +673,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: _isSyncing ? null : _handlePreloadWords,
-                            icon: const Icon(Icons.download, size: 18),
-                            label: const Text('Tải offline 100 từ'),
+                            icon: _isSyncing
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.download, size: 18),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                _isSyncing ? 'Đang tải...' : (_cachedWordsCount > 0 ? 'Cập nhật Offline' : 'Tải Offline'),
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppTheme.primary,
                               side: const BorderSide(color: AppTheme.primary),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        if (_cachedWordsCount > 0) ...[
+                          const SizedBox(width: 6),
+                          IconButton(
+                            onPressed: _isSyncing ? null : _handleClearOfflineCache,
+                            icon: const Icon(Icons.delete_outline, color: AppTheme.red),
+                            tooltip: 'Xóa dữ liệu Offline (Dùng Online)',
+                          ),
+                        ],
+                        const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: _isSyncing || _pendingSyncCount == 0 ? null : _handleSyncNow,
                             icon: const Icon(Icons.cloud_upload, size: 18),
-                            label: const Text('Đồng bộ ngay'),
+                            label: const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Đồng bộ ngay', maxLines: 1, softWrap: false),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.primary,
                               foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
                           ),
                         ),
@@ -587,6 +719,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // App Update Section
+            const Text('Cập nhật ứng dụng', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.system_update_rounded, color: AppTheme.primary, size: 22),
+                ),
+                title: const Text('Phiên bản v${AppUpdateService.currentVersion}', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                subtitle: const Text('Kiểm tra bản phát hành mới từ GitHub', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                trailing: _isCheckingUpdate
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                    : TextButton(
+                        onPressed: _handleCheckForUpdate,
+                        child: const Text('Kiểm tra', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+                      ),
               ),
             ),
             const SizedBox(height: 32),

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
@@ -9,12 +10,14 @@ import '../services/auth_service.dart';
 import '../services/placement_test_service.dart';
 import '../models/word_model.dart';
 import '../core/theme/app_theme.dart';
+import '../widgets/vocap_logo.dart';
 import 'flashcard_screen.dart';
 import 'quiz_screen.dart';
 import 'topic_explorer_screen.dart';
 import 'auth_screen.dart';
 import 'settings_screen.dart';
 import 'placement_test_screen.dart';
+import 'welcome_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -55,6 +58,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadDashboardData();
   }
 
+  double _parseUpperBand(String bandStr) {
+    final matches = RegExp(r'(\d+\.\d+|\d+)').allMatches(bandStr).toList();
+    if (matches.isEmpty) return 9.0;
+    return double.tryParse(matches.last.group(0) ?? '9.0') ?? 9.0;
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() {
       _isLoading = true;
@@ -82,12 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
         learnedToday = cloudLearnedToday;
       }
 
-      final totalLearned = cloudStats != null
-          ? cloudStats['totalLearned']!
-          : (progress['totalLearned'] as int);
-      final totalMastered = cloudStats != null
-          ? cloudStats['totalMastered']!
-          : (progress['totalMastered'] as int);
+      final int localTotalLearned = progress['totalLearned'] as int;
+      final int cloudTotalLearned = cloudStats != null ? (cloudStats['totalLearned'] ?? 0) : 0;
+      int totalLearned = cloudTotalLearned > localTotalLearned ? cloudTotalLearned : localTotalLearned;
+      if (learnedToday > totalLearned) {
+        totalLearned = learnedToday;
+      }
+
+      final int localTotalMastered = progress['totalMastered'] as int;
+      final int cloudTotalMastered = cloudStats != null ? (cloudStats['totalMastered'] ?? 0) : 0;
+      final totalMastered = cloudTotalMastered > localTotalMastered ? cloudTotalMastered : localTotalMastered;
 
       final prefs = await SharedPreferences.getInstance();
       final targetBand = profile != null && profile['target_band'] != null
@@ -110,6 +123,33 @@ class _HomeScreenState extends State<HomeScreen> {
         limit: dailyTarget,
       );
 
+      // Filter out words already completed today & words below currentBand if autoSkip is enabled
+      final todayLearnedIds = await _progressService.getTodayWordIds();
+      final double minBand = double.tryParse(currentBand) ?? 5.5;
+      var remainingWords = sessionWords.where((w) {
+        if (todayLearnedIds.contains(w.id)) return false;
+        if (autoSkip && w.sessionType != 'review') {
+          final upperBand = _parseUpperBand(w.ieltsBand);
+          if (upperBand < minBand) return false;
+        }
+        return true;
+      }).toList();
+
+      // Fallback: if filtering left fewer words than needed, fetch words at or above minBand
+      final int remainingNeeded = (dailyTarget - learnedToday).clamp(0, dailyTarget);
+      if (remainingWords.isEmpty && remainingNeeded > 0) {
+        final bandWords = await _supabaseService.getWordsAtOrAboveBand(
+          autoSkip ? minBand : 1.0,
+          limit: dailyTarget + todayLearnedIds.length,
+        );
+        remainingWords = bandWords.where((w) => !todayLearnedIds.contains(w.id)).toList();
+      }
+
+      // Cap remainingWords to the exact number needed to finish today's dailyTarget
+      if (remainingNeeded > 0 && remainingWords.length > remainingNeeded) {
+        remainingWords = remainingWords.take(remainingNeeded).toList();
+      }
+
       if (mounted) {
         setState(() {
           _dailyTarget = dailyTarget;
@@ -124,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _xp = profile != null && profile['xp_points'] != null && (profile['xp_points'] as int) > 0
               ? (profile['xp_points'] as int)
               : (progress['xp'] as int);
-          _dueWords = sessionWords;
+          _dueWords = remainingWords;
           _userProfile = profile;
           _isLoading = false;
         });
@@ -186,36 +226,44 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              // Top Header: Greeting & Streak
+              // Top Header: Logo, Greeting & Streak
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              'XIN CHÀO, ${userName.toUpperCase()} 👋',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textMuted, letterSpacing: 0.5),
-                            ),
-                            if (!_authService.isLoggedIn) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: _openAuthScreen,
-                                child: const Text(
-                                  'Đăng nhập',
-                                  style: TextStyle(fontSize: 12, color: AppTheme.primary, fontWeight: FontWeight.w600),
-                                ),
+                        const VocapLogo(size: 42),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'XIN CHÀO, ${userName.toUpperCase()} 👋',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textMuted, letterSpacing: 0.5),
+                                  ),
+                                  if (!_authService.isLoggedIn) ...[
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: _openAuthScreen,
+                                      child: const Text(
+                                        'Đăng nhập',
+                                        style: TextStyle(fontSize: 11, color: AppTheme.primary, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Hôm nay',
+                                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6),
                               ),
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Hôm nay',
-                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.6),
+                          ),
                         ),
                       ],
                     ),
@@ -260,36 +308,67 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // Daily Goal Card
+              // Daily Goal & Total Progress Card (2-column split)
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                   child: Row(
                     children: [
-                      CircularPercentIndicator(
-                        radius: 38,
-                        lineWidth: 6,
-                        percent: progressPercent,
-                        center: Text(
-                          '$displayLearned/$_dailyTarget',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: -0.2),
-                        ),
-                        progressColor: AppTheme.primary,
-                        backgroundColor: Colors.white.withValues(alpha: 0.08),
-                        circularStrokeCap: CircularStrokeCap.round,
-                      ),
-                      const SizedBox(width: 20),
+                      // Left: Daily Goal
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Mục tiêu hàng ngày', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
-                            const SizedBox(height: 4),
+                            CircularPercentIndicator(
+                              radius: 36,
+                              lineWidth: 6,
+                              percent: progressPercent,
+                              center: Text(
+                                '$displayLearned/$_dailyTarget',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
+                              ),
+                              progressColor: AppTheme.primary,
+                              backgroundColor: Colors.white.withValues(alpha: 0.08),
+                              circularStrokeCap: CircularStrokeCap.round,
+                            ),
+                            const SizedBox(height: 10),
+                            const Text('Hôm nay', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
                             Text(
                               displayLearned >= _dailyTarget
-                                  ? '🎉 Xuất sắc! Bạn đã đạt mục tiêu $_dailyTarget từ hôm nay!'
-                                  : 'Đã ôn $displayLearned/$_dailyTarget từ. Còn ${_dailyTarget - displayLearned} từ nữa.',
-                              style: const TextStyle(fontSize: 13, color: AppTheme.textMuted, height: 1.3),
+                                  ? 'Đã hoàn thành ✓'
+                                  : 'Còn ${_dailyTarget - displayLearned} từ',
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 0.8,
+                        height: 86,
+                        color: AppTheme.borderSubtle,
+                      ),
+                      // Right: Total Words Progress
+                      Expanded(
+                        child: Column(
+                          children: [
+                            CircularPercentIndicator(
+                              radius: 36,
+                              lineWidth: 6,
+                              percent: (_totalLearned / 5943).clamp(0.0, 1.0),
+                              center: Text(
+                                '${((_totalLearned / 5943) * 100).toStringAsFixed(1)}%',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.2),
+                              ),
+                              progressColor: AppTheme.mint,
+                              backgroundColor: Colors.white.withValues(alpha: 0.08),
+                              circularStrokeCap: CircularStrokeCap.round,
+                            ),
+                            const SizedBox(height: 10),
+                            const Text('Tổng từ vựng', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$_totalLearned / 5.943 từ',
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                             ),
                           ],
                         ),
@@ -300,97 +379,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 18),
 
-              // Daily Study Hero Card
-              Card(
-                child: Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primary.withValues(alpha: 0.12),
-                        Colors.transparent,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.psychology, color: AppTheme.primary, size: 22),
-                              SizedBox(width: 8),
-                              Text('Bài học hôm nay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${_dueWords.length} từ',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+              // Single Clean Study Action Button
+              ElevatedButton.icon(
+                onPressed: _isLoading || _dueWords.isEmpty
+                    ? null
+                    : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FlashcardScreen(
+                              words: _dueWords,
+                              title: 'Bài học hôm nay',
+                              initialCompleted: _learnedToday,
+                              dailyTarget: _dailyTarget,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          if (_dueWords.any((w) => w.sessionType == 'review')) ...[
-                            _buildGlassBadge(
-                              icon: Icons.local_fire_department_rounded,
-                              count: _dueWords.where((w) => w.sessionType == "review").length,
-                              label: 'cần nhắc lại',
-                              color: AppTheme.orange,
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          if (_dueWords.any((w) => w.sessionType == 'new')) ...[
-                            _buildGlassBadge(
-                              icon: Icons.auto_awesome_rounded,
-                              count: _dueWords.where((w) => w.sessionType == "new").length,
-                              label: 'từ mới hôm nay',
-                              color: AppTheme.mint,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Tự động nhắc lại từ sắp quên và học thêm từ mới phù hợp mục tiêu Band $_targetBand của bạn.',
-                        style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _isLoading || _dueWords.isEmpty
-                            ? null
-                            : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FlashcardScreen(words: _dueWords, title: 'Bài học hôm nay'),
-                                  ),
-                                ).then((_) => _loadDashboardData());
-                              },
-                        icon: const Icon(Icons.play_arrow),
-                        label: Text(_isLoading ? 'Đang chuẩn bị phiên học...' : 'Bắt đầu học ngay (${_dueWords.length} từ)'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ],
-                  ),
+                        ).then((_) => _loadDashboardData());
+                      },
+                icon: const Icon(Icons.play_arrow_rounded, size: 24),
+                label: Text(
+                  _isLoading
+                      ? 'Đang chuẩn bị...'
+                      : (_dueWords.isEmpty
+                          ? 'Đã hoàn thành mục tiêu hôm nay ✓'
+                          : (_learnedToday > 0
+                              ? 'Tiếp tục học (${_dueWords.length} từ còn lại)'
+                              : 'Bắt đầu học ngay (${_dueWords.length} từ)')),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.2),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 56),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -401,8 +423,8 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   _buildQuickAction(
-                    icon: Icons.style,
-                    color: const Color(0xFF10B981),
+                    icon: CupertinoIcons.layers_fill,
+                    color: AppTheme.mint,
                     title: 'Flashcards',
                     subtitle: 'Lật thẻ ghi nhớ',
                     onTap: () {
@@ -410,7 +432,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => FlashcardScreen(words: _dueWords),
+                            builder: (_) => FlashcardScreen(
+                              words: _dueWords,
+                              initialCompleted: _learnedToday,
+                              dailyTarget: _dailyTarget,
+                            ),
                           ),
                         ).then((_) => _loadDashboardData());
                       }
@@ -418,8 +444,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 12),
                   _buildQuickAction(
-                    icon: Icons.quiz,
-                    color: const Color(0xFF6366F1),
+                    icon: CupertinoIcons.question_circle_fill,
+                    color: AppTheme.accent,
                     title: 'Nghĩa ➔ Từ',
                     subtitle: 'Trắc nghiệm chọn từ',
                     onTap: () {
@@ -443,8 +469,8 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   _buildQuickAction(
-                    icon: Icons.translate,
-                    color: const Color(0xFF8B5CF6),
+                    icon: CupertinoIcons.globe,
+                    color: const Color(0xFFBF5AF2),
                     title: 'Từ ➔ Nghĩa',
                     subtitle: 'Hiểu ngữ nghĩa nhanh',
                     onTap: () {
@@ -464,8 +490,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 12),
                   _buildQuickAction(
-                    icon: Icons.headphones,
-                    color: const Color(0xFF38BDF8),
+                    icon: CupertinoIcons.headphones,
+                    color: AppTheme.primary,
                     title: 'Luyện nghe',
                     subtitle: 'Âm thanh US chuẩn',
                     onTap: () {
@@ -489,8 +515,8 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   _buildQuickAction(
-                    icon: Icons.edit_note,
-                    color: const Color(0xFFF59E0B),
+                    icon: CupertinoIcons.pencil,
+                    color: AppTheme.orange,
                     title: 'Điền từ',
                     subtitle: 'Ngữ cảnh câu IELTS',
                     onTap: () {
@@ -510,9 +536,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 12),
                   _buildQuickAction(
-                    icon: Icons.explore,
-                    color: const Color(0xFFEC4899),
-                    title: 'Khám phá 5.000 từ',
+                    icon: CupertinoIcons.compass_fill,
+                    color: const Color(0xFFFF375F),
+                    title: 'Khám phá từ',
                     subtitle: '20 Chủ đề & Bộ lọc',
                     onTap: () {
                       setState(() => _selectedTab = 1);
@@ -555,9 +581,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Icon(icon, color: color, size: 22),
                 ),
                 const SizedBox(height: 14),
-                Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 3),
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -636,37 +672,36 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFloatingDock() {
     return Center(
       heightFactor: 1.0,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 380),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(100),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xE61C1C1E),
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  width: 0.8,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(100),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xE61C1C1E),
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.14),
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 28,
+                  offset: const Offset(0, 10),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 28,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildDockItem(index: 0, icon: Icons.home_rounded, label: 'Trang chủ'),
-                  _buildDockItem(index: 1, icon: Icons.explore_rounded, label: 'Khám phá'),
-                  _buildDockItem(index: 2, icon: Icons.person_rounded, label: 'Cá nhân'),
-                ],
-              ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDockItem(index: 0, icon: CupertinoIcons.house_fill, label: 'Trang chủ'),
+                const SizedBox(width: 6),
+                _buildDockItem(index: 1, icon: CupertinoIcons.compass_fill, label: 'Khám phá'),
+                const SizedBox(width: 6),
+                _buildDockItem(index: 2, icon: CupertinoIcons.person_fill, label: 'Cá nhân'),
+              ],
             ),
           ),
         ),
@@ -685,7 +720,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(horizontal: isSelected ? 18 : 14, vertical: 10),
+        padding: EdgeInsets.symmetric(horizontal: isSelected ? 18 : 16, vertical: 11),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.primary.withValues(alpha: 0.18) : Colors.transparent,
           borderRadius: BorderRadius.circular(100),
@@ -698,13 +733,15 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(
               icon,
-              size: 20,
+              size: 19,
               color: isSelected ? AppTheme.primary : AppTheme.textMuted,
             ),
             if (isSelected) ...[
               const SizedBox(width: 8),
               Text(
                 label,
+                maxLines: 1,
+                softWrap: false,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -768,7 +805,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         tooltip: 'Đăng xuất',
                         onPressed: () async {
                           await _authService.signOut();
-                          _loadDashboardData();
+                          if (!context.mounted) return;
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                            (route) => false,
+                          );
                         },
                       )
                     : TextButton(

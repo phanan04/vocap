@@ -11,11 +11,15 @@ import 'quiz_screen.dart';
 class FlashcardScreen extends StatefulWidget {
   final List<WordModel> words;
   final String title;
+  final int initialCompleted;
+  final int? dailyTarget;
 
   const FlashcardScreen({
     super.key,
     required this.words,
     this.title = 'Thẻ ghi nhớ Flashcards',
+    this.initialCompleted = 0,
+    this.dailyTarget,
   });
 
   @override
@@ -230,11 +234,13 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
     }
 
     final word = _words[_currentIndex];
-    final progress = (_currentIndex + 1) / _words.length;
+    final int displayCurrent = widget.initialCompleted + _currentIndex + 1;
+    final int displayTotal = widget.dailyTarget ?? (widget.initialCompleted + _words.length);
+    final progress = displayTotal > 0 ? (displayCurrent / displayTotal).clamp(0.0, 1.0) : 0.0;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${_currentIndex + 1} / ${_words.length}'),
+        title: Text('$displayCurrent / $displayTotal'),
         actions: [
           IconButton(
             icon: Icon(
@@ -532,38 +538,33 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
                 ),
               ],
             ),
-            const Divider(height: 24, color: Color(0xFF334155)),
+            const Divider(height: 24, color: AppTheme.borderSubtle),
 
             // Vietnamese Meaning
-            const Text('Nghĩa tiếng Việt:', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-            const SizedBox(height: 4),
             Text(
               word.meaningVi,
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF34D399), // Emerald highlight
+                color: AppTheme.mint,
+                letterSpacing: -0.3,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // English Definition
-            const Text('Định nghĩa Oxford:', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-            const SizedBox(height: 4),
             Text(
               word.definition,
-              style: const TextStyle(fontSize: 14, height: 1.4),
+              style: const TextStyle(fontSize: 15, height: 1.45, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 16),
 
             // Bilingual Example
-            const Text('Ví dụ mẫu:', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-            const SizedBox(height: 4),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(14),
                 border: const Border(left: BorderSide(color: AppTheme.primary, width: 3)),
               ),
               child: Column(
@@ -571,12 +572,12 @@ class _FlashcardScreenState extends State<FlashcardScreen> with SingleTickerProv
                 children: [
                   Text(
                     word.example,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, height: 1.4),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     word.exampleVi,
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                    style: const TextStyle(fontSize: 13.5, color: AppTheme.textMuted, height: 1.35),
                   ),
                 ],
               ),

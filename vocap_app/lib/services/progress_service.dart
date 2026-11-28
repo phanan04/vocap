@@ -19,6 +19,15 @@ class ProgressService {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
+  Future<Set<int>> getTodayWordIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = _todayString();
+    final lastDate = prefs.getString(_keyLastDate) ?? '';
+    if (lastDate != today) return {};
+    final list = prefs.getStringList(_keyTodayWordIds) ?? [];
+    return list.map((e) => int.tryParse(e)).whereType<int>().toSet();
+  }
+
   Future<Map<String, dynamic>> getProgress() async {
     final prefs = await SharedPreferences.getInstance();
     final today = _todayString();

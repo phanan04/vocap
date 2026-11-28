@@ -15,11 +15,9 @@ void main() async {
     publishableKey: SupabaseConstants.supabaseAnonKey,
   );
 
-  final prefs = await SharedPreferences.getInstance();
   final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
-  final hasSeenWelcome = prefs.getBool('has_seen_welcome') ?? false;
 
-  final initialScreen = (isLoggedIn || hasSeenWelcome)
+  final initialScreen = isLoggedIn
       ? const HomeScreen()
       : const WelcomeScreen();
 

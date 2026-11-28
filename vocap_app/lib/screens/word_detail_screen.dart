@@ -181,51 +181,57 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Vietnamese Meaning
-                _buildSection(
-                  title: 'Nghĩa tiếng Việt',
-                  child: Text(
-                    word.meaningVi,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF34D399),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Oxford Definition
-                _buildSection(
-                  title: 'Định nghĩa chuẩn Oxford',
-                  child: Text(
-                    word.definition,
-                    style: const TextStyle(fontSize: 15, height: 1.45),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Examples
-                _buildSection(
-                  title: 'Ví dụ ngữ cảnh IELTS',
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(12),
-                      border: const Border(left: BorderSide(color: AppTheme.primary, width: 3.5)),
-                    ),
+                // Core Meaning, Definition & Example (Unified Scannable Card)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          word.example,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                        const Text(
+                          'NGHĨA & CÁCH DÙNG',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textMuted, letterSpacing: 0.6),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          word.exampleVi,
-                          style: const TextStyle(fontSize: 14, color: AppTheme.textMuted),
+                          word.meaningVi,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.mint,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          word.definition,
+                          style: const TextStyle(fontSize: 15, height: 1.5, color: AppTheme.textSecondary),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          child: Divider(height: 1),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(14),
+                            border: const Border(left: BorderSide(color: AppTheme.primary, width: 3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                word.example,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, height: 1.4),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                word.exampleVi,
+                                style: const TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.35),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),

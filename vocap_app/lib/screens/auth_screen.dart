@@ -313,16 +313,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                 ),
-                const SizedBox(height: 16),
-
-                // Continue as guest button
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Bỏ qua & Tiếp tục với tư cách Khách',
-                    style: TextStyle(color: AppTheme.textMuted),
-                  ),
-                ),
               ],
             ),
           ),

@@ -432,10 +432,14 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                             );
                           },
                           icon: const Icon(Icons.style, size: 18),
-                          label: const Text('Học Flashcard'),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Học Flashcard', maxLines: 1, softWrap: false),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primary,
                             foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                           ),
                         ),
                       ),
@@ -455,10 +459,14 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                             );
                           },
                           icon: const Icon(Icons.quiz, size: 18),
-                          label: const Text('Luyện Quiz'),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Luyện Quiz', maxLines: 1, softWrap: false),
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.accent,
                             side: const BorderSide(color: AppTheme.accent),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                           ),
                         ),
                       ),
@@ -769,7 +777,10 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                       );
                     },
                     icon: const Icon(Icons.style, size: 16),
-                    label: const Text('Học thẻ này'),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Học thẻ này', maxLines: 1, softWrap: false),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
                       foregroundColor: Colors.white,
@@ -790,7 +801,10 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                       );
                     },
                     icon: const Icon(Icons.quiz, size: 16),
-                    label: const Text('Luyện Quiz'),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Luyện Quiz', maxLines: 1, softWrap: false),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.accent,
                       side: const BorderSide(color: AppTheme.accent),
@@ -896,14 +910,21 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.7,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = width >= 900 ? 4 : (width >= 600 ? 3 : 2);
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 110),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: 1.7,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
       itemCount: _topics.length,
       itemBuilder: (_, idx) {
         final item = _topics[idx];
@@ -960,6 +981,10 @@ class _TopicExplorerScreenState extends State<TopicExplorerScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+        );
+      },
             ),
           ),
         );
